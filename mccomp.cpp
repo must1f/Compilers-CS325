@@ -764,8 +764,7 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
 
 /*** TODO : Task 2 - Parser ***
 
-// args ::= arg_list
-//      |  ε
+
 // arg_list ::= arg_list "," expr
 //      | expr
 
@@ -780,6 +779,25 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
 //      | IDENT | IDENT "(" args ")"
 //      | INT_LIT | FLOAT_LIT | BOOL_LIT
 **/
+
+// Need to eliminate left recursion 
+// Compute first sets and follow sets for each non-terminal
+// Top down parser
+// Predictive LL(1) parser sometimes can use LL(2) parser as said in lectures
+// If there is conflicts can use left factoring to solve the problem
+
+//TODO
+//FIRST(args) FIRST(arg_list)
+// args ::= arg_list
+//      |  ε
+static std::unique_ptr<ASTnode> ParseArgs(){
+  
+}
+
+static std::unique_ptr<ASTnode> ParseArgList(){
+
+}
+
 
 // expr ::= IDENT "=" expr
 //      |  rval
