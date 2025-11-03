@@ -764,6 +764,8 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
 
 /*** TODO : Task 2 - Parser ***
 
+// args ::= arg_list
+//      |  ε
 
 // arg_list ::= arg_list "," expr
 //      | expr
@@ -787,7 +789,8 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
 // If there is conflicts can use left factoring to solve the problem
 
 //TODO
-//FIRST(args) FIRST(arg_list)
+//FIRST(args) = {}
+//FIRST(arg_list)
 // args ::= arg_list
 //      |  ε
 static std::unique_ptr<ASTnode> ParseArgs(){
