@@ -634,6 +634,65 @@ std::unique_ptr<ASTnode> LogError(const char *Str) {
   return nullptr;
 }
 
+/// BinaryExprAST - Expression class for binary operators
+class BinaryExprAST : public ASTnode {
+  std::string Op;
+  std::unique_ptr<ASTnode> LHS, RHS;
+
+public:
+  BinaryExprAST(std::string op, std::unique_ptr<ASTnode> lhs, std::unique_ptr<ASTnode> rhs) : 
+                Op(op), LHS(std::move(lhs)), RHS(std::move(rhs)) {}
+
+  const std::string &getOp() const {return Op;}
+  std::unique_ptr<ASTnode> &getLHS() {return LHS; }
+  std::unique_ptr<ASTnode> &getRHS() {return RHS; }
+};
+
+/// UnaryExprAST - Expression class for unary operators
+class UnaryExprAST : public ASTnode {
+  std::string Op; 
+  std::unique_ptr<ASTnode> Operand;
+
+public:
+  UnaryExprAST(std::string op, std::unique_ptr<ASTnode> operand)
+      : Op(op), Operand(std::move(operand)) {}
+  
+  const std::string &getOp() const { return Op; }
+  std::unique_ptr<ASTnode> &getOperand() { return Operand; }
+};
+
+/// CallExprAST - Expression class for function calls
+class CallExprAST : public ASTnode {
+  std::string Callee;  
+  std::vector<std::unique_ptr<ASTnode>> Args;  
+
+public:
+  CallExprAST(const std::string &callee,
+              std::vector<std::unique_ptr<ASTnode>> args)
+      : Callee(callee), Args(std::move(args)) {}
+  
+  const std::string &getCallee() const { return Callee; }
+  std::vector<std::unique_ptr<ASTnode>> &getArgs() { return Args; }
+};
+
+
+/// AssignmentExprAST - Expression class for assignments
+class AssignmentExprAST : public ASTnode {
+  std::string VarName;  
+  std::unique_ptr<ASTnode> RHS;  
+
+public:
+  AssignmentExprAST(const std::string &varname,
+                    std::unique_ptr<ASTnode> rhs)
+      : VarName(varname), RHS(std::move(rhs)) {}
+  
+  const std::string &getVarName() const { return VarName; }
+  std::unique_ptr<ASTnode> &getRHS() { return RHS; }
+};
+
+
+
+
 //===----------------------------------------------------------------------===//
 // Recursive Descent - Function call for each production
 //===----------------------------------------------------------------------===//
@@ -762,7 +821,7 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
   return param_list;
 }
 
-/*** TODO : Task 2 - Parser ***
+// TODO : Task 2 - Parser
 
 // args ::= arg_list
 //      |  ε
@@ -780,26 +839,13 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
 //      | "(" expr ")"
 //      | IDENT | IDENT "(" args ")"
 //      | INT_LIT | FLOAT_LIT | BOOL_LIT
-**/
 
-// Need to eliminate left recursion 
-// Compute first sets and follow sets for each non-terminal
-// Top down parser
-// Predictive LL(1) parser sometimes can use LL(2) parser as said in lectures
-// If there is conflicts can use left factoring to solve the problem
 
-//TODO
-//FIRST(args) = {}
-//FIRST(arg_list)
 // args ::= arg_list
 //      |  ε
-static std::unique_ptr<ASTnode> ParseArgs(){
-  
-}
+static std::unique_ptr<ASTnode> ParseArgs(){return nullptr; }
 
-static std::unique_ptr<ASTnode> ParseArgList(){
-
-}
+static std::unique_ptr<ASTnode> ParseArgList(){return nullptr; }
 
 
 // expr ::= IDENT "=" expr
