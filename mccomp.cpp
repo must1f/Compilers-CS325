@@ -36,6 +36,59 @@
 using namespace llvm;
 using namespace llvm::sys;
 
+// ANSI color codes for better readability
+#define USE_COLORS 1
+
+#if USE_COLORS
+  #define COLOR_RESET   std::string("\033[0m")
+  #define COLOR_RED     std::string("\033[31m")
+  #define COLOR_GREEN   std::string("\033[32m")
+  #define COLOR_YELLOW  std::string("\033[33m")
+  #define COLOR_BLUE    std::string("\033[34m")
+  #define COLOR_MAGENTA std::string("\033[35m")
+  #define COLOR_CYAN    std::string("\033[36m")
+  #define COLOR_BOLD    std::string("\033[1m")
+#else
+  #define COLOR_RESET   std::string("")
+  #define COLOR_RED     std::string("")
+  #define COLOR_GREEN   std::string("")
+  #define COLOR_YELLOW  std::string("")
+  #define COLOR_BLUE    std::string("")
+  #define COLOR_MAGENTA std::string("")
+  #define COLOR_CYAN    std::string("")
+  #define COLOR_BOLD    std::string("")
+#endif
+
+//===----------------------------------------------------------------------===//
+// AST Display Infrastructure
+//===----------------------------------------------------------------------===//
+
+namespace ASTPrint {
+  // Global indentation level for tree printing
+  static int indentLevel = 0;
+  
+  // Generate indentation string
+  static std::string indent() {
+    return std::string(indentLevel * 2, ' ');
+  }
+  
+  // Tree drawing characters
+  static const char* BRANCH = "├─ ";
+  static const char* LAST_BRANCH = "└─ ";
+  static const char* VERTICAL = "│  ";
+  static const char* SPACE = "   ";
+  
+  // Helper to print with tree structure
+  static std::string treePrefix(bool isLast) {
+    return isLast ? LAST_BRANCH : BRANCH;
+  }
+  
+  // Helper to continue tree lines
+  static std::string treeContinue(bool isLast) {
+    return isLast ? SPACE : VERTICAL;
+  }
+}
+
 FILE *pFile;
 
 //===----------------------------------------------------------------------===//
@@ -441,6 +494,13 @@ class IntASTnode : public ASTnode {
 public:
   IntASTnode(TOKEN tok, int val) : Val(val), Tok(tok) {}
   const std::string &getType() const { return Tok.lexeme; }
+  int getValue() const { return Val; }
+  
+  virtual std::string to_string() const override {
+    return std::string(COLOR_CYAN) + "IntLiteral" + std::string(COLOR_RESET) + "(" + 
+           std::string(COLOR_BOLD) + std::to_string(Val) + std::string(COLOR_RESET) + 
+           " : " + std::string(COLOR_YELLOW) + Tok.lexeme + std::string(COLOR_RESET) + ")";
+  }
 };
 
 /// BoolASTnode - Class for boolean literals true and false,
@@ -451,6 +511,13 @@ class BoolASTnode : public ASTnode {
 public:
   BoolASTnode(TOKEN tok, bool B) : Bool(B), Tok(tok) {}
   const std::string &getType() const { return Tok.lexeme; }
+  bool getValue() const { return Bool; }
+  
+  virtual std::string to_string() const override {
+    return std::string(COLOR_CYAN) + "BoolLiteral" + std::string(COLOR_RESET) + "(" + 
+           std::string(COLOR_BOLD) + std::string(Bool ? "true" : "false") + std::string(COLOR_RESET) + 
+           " : " + std::string(COLOR_YELLOW) + Tok.lexeme + std::string(COLOR_RESET) + ")";
+  }
 };
 
 /// FloatASTnode - Node class for floating point literals like "1.0".
@@ -461,6 +528,13 @@ class FloatASTnode : public ASTnode {
 public:
   FloatASTnode(TOKEN tok, double Val) : Val(Val), Tok(tok) {}
   const std::string &getType() const { return Tok.lexeme; }
+  double getValue() const { return Val; }
+  
+  virtual std::string to_string() const override {
+    return std::string(COLOR_CYAN) + "FloatLiteral" + std::string(COLOR_RESET) + "(" + 
+           std::string(COLOR_BOLD) + std::to_string(Val) + std::string(COLOR_RESET) + 
+           " : " + std::string(COLOR_YELLOW) + Tok.lexeme + std::string(COLOR_RESET) + ")";
+  }
 };
 
 /// VariableASTnode - Class for referencing a variable (i.e. identifier), like
@@ -478,6 +552,11 @@ public:
   const std::string &getName() const { return Name; }
   const std::string &getType() const { return Tok.lexeme; }
   const IDENT_TYPE getVarType() const { return VarType; }
+
+  virtual std::string to_string() const override {
+    return std::string(COLOR_GREEN) + "VarRef" + std::string(COLOR_RESET) + "(" + 
+           std::string(COLOR_BOLD) + Name + std::string(COLOR_RESET) + ")";
+  }
 };
 
 /// ParamAST - Class for a parameter declaration
@@ -509,6 +588,12 @@ public:
       : Var(std::move(var)), Type(type) {}
   const std::string &getType() const { return Type; }
   const std::string &getName() const { return Var->getName(); }
+
+  virtual std::string to_string() const override {
+    return std::string(COLOR_CYAN) + "VarDecl" + std::string(COLOR_RESET) + " [" + 
+           std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " + 
+           std::string(COLOR_BOLD) + Var->getName() + std::string(COLOR_RESET) + "]";
+  }
 };
 
 /// GlobVarDeclAST - Class for a Global variable declaration
@@ -521,6 +606,12 @@ public:
       : Var(std::move(var)), Type(type) {}
   const std::string &getType() const { return Type; }
   const std::string &getName() const { return Var->getName(); }
+
+  virtual std::string to_string() const override {
+    return std::string(COLOR_CYAN) + "GlobalVarDecl" + std::string(COLOR_RESET) + " [" + 
+           std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " + 
+           std::string(COLOR_BOLD) + Var->getName() + std::string(COLOR_RESET) + "]";
+  }
 };
 
 /// FunctionPrototypeAST - Class for a function declaration's signature
@@ -538,6 +629,36 @@ public:
   const std::string &getType() const { return Type; }
   int getSize() const { return Params.size(); }
   std::vector<std::unique_ptr<ParamAST>> &getParams() { return Params; }
+
+  std::string to_string() const {
+    std::string result = std::string(COLOR_CYAN) + "FunctionProto" + std::string(COLOR_RESET) + " '" + 
+                        std::string(COLOR_BOLD) + Name + std::string(COLOR_RESET) + "'\n";
+    
+    result += ASTPrint::indent() + ASTPrint::BRANCH;
+    result += std::string(COLOR_BLUE) + "ReturnType: " + std::string(COLOR_RESET) + 
+             std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + "\n";
+    
+    result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+    result += std::string(COLOR_BLUE) + "Parameters (" + std::to_string(Params.size()) + 
+             "):" + std::string(COLOR_RESET);
+    
+    if (Params.empty()) {
+      result += " " + std::string(COLOR_YELLOW) + "(none)" + std::string(COLOR_RESET);
+    } else {
+      result += "\n";
+      ASTPrint::indentLevel++;
+      for (size_t i = 0; i < Params.size(); i++) {
+        bool isLast = (i == Params.size() - 1);
+        result += ASTPrint::indent() + ASTPrint::treePrefix(isLast);
+        result += std::string(COLOR_YELLOW) + Params[i]->getType() + std::string(COLOR_RESET) + " " + 
+                 std::string(COLOR_BOLD) + Params[i]->getName() + std::string(COLOR_RESET);
+        if (!isLast) result += "\n";
+      }
+      ASTPrint::indentLevel--;
+    }
+    
+    return result;
+  }
 };
 
 class ExprAST : public ASTnode {
@@ -561,6 +682,59 @@ public:
   BlockAST(std::vector<std::unique_ptr<VarDeclAST>> localDecls,
            std::vector<std::unique_ptr<ASTnode>> stmts)
       : LocalDecls(std::move(localDecls)), Stmts(std::move(stmts)) {}
+  
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_CYAN) + "Block" + std::string(COLOR_RESET) + "\n";
+    
+    // Print local declarations
+    if (!LocalDecls.empty()) {
+      result += ASTPrint::indent() + ASTPrint::BRANCH;
+      result += std::string(COLOR_BLUE) + "LocalDecls (" + std::to_string(LocalDecls.size()) + 
+               "):" + std::string(COLOR_RESET) + "\n";
+      
+      ASTPrint::indentLevel++;
+      for (size_t i = 0; i < LocalDecls.size(); i++) {
+        bool isLast = (i == LocalDecls.size() - 1) && Stmts.empty();
+        result += ASTPrint::indent() + ASTPrint::treePrefix(isLast);
+        result += LocalDecls[i]->to_string();
+        if (i < LocalDecls.size() - 1 || !Stmts.empty()) result += "\n";
+      }
+      ASTPrint::indentLevel--;
+    }
+    
+    // Print statements
+    if (!Stmts.empty()) {
+      if (!LocalDecls.empty()) result += "\n";
+      
+      result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+      result += std::string(COLOR_BLUE) + "Statements (" + std::to_string(Stmts.size()) + 
+               "):" + std::string(COLOR_RESET) + "\n";
+      
+      ASTPrint::indentLevel++;
+      for (size_t i = 0; i < Stmts.size(); i++) {
+        bool isLast = (i == Stmts.size() - 1);
+        result += ASTPrint::indent() + ASTPrint::treePrefix(isLast);
+        
+        if (Stmts[i]) {
+          std::string stmtStr = Stmts[i]->to_string();
+          // Don't add extra newline - just append the statement directly
+          result += stmtStr;  // ← CHANGED: removed the conditional newline before
+        } else {
+          result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+        }
+        
+        if (!isLast) result += "\n";
+      }
+      ASTPrint::indentLevel--;
+    }
+    
+    if (LocalDecls.empty() && Stmts.empty()) {
+      result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+      result += std::string(COLOR_YELLOW) + "(empty)" + std::string(COLOR_RESET);
+    }
+    
+    return result;
+  }
 };
 
 /// FunctionDeclAST - This class represents a function definition itself.
@@ -572,6 +746,29 @@ public:
   FunctionDeclAST(std::unique_ptr<FunctionPrototypeAST> Proto,
                   std::unique_ptr<ASTnode> Block)
       : Proto(std::move(Proto)), Block(std::move(Block)) {}
+
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_GREEN) + std::string(COLOR_BOLD) + "╔═══ FunctionDecl ═══╗" 
+                        + std::string(COLOR_RESET) + "\n";
+    
+    ASTPrint::indentLevel++;
+    result += ASTPrint::indent() + Proto->to_string() + "\n";
+    result += ASTPrint::indent() + std::string(COLOR_BLUE) + "Body:" + std::string(COLOR_RESET) + "\n";
+    
+    ASTPrint::indentLevel++;
+    if (Block) {
+      result += ASTPrint::indent() + Block->to_string();
+    } else {
+      result += ASTPrint::indent() + std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+    }
+    ASTPrint::indentLevel--;
+    ASTPrint::indentLevel--;
+    
+    result += "\n" + ASTPrint::indent() + 
+             std::string(COLOR_GREEN) + std::string(COLOR_BOLD) + "╚════════════════════╝" + std::string(COLOR_RESET);
+    
+    return result;
+  }
 };
 
 /// IfExprAST - Expression class for if/then/else.
@@ -583,6 +780,67 @@ public:
             std::unique_ptr<ASTnode> Else)
       : Cond(std::move(Cond)), Then(std::move(Then)), Else(std::move(Else)) {}
 
+virtual std::string to_string() const override {
+  std::string result = std::string(COLOR_MAGENTA) + "IfStmt" + std::string(COLOR_RESET) + "\n";
+  
+  ASTPrint::indentLevel++;
+  
+  // Condition
+  result += ASTPrint::indent() + ASTPrint::BRANCH;
+  result += std::string(COLOR_BLUE) + "Condition: " + std::string(COLOR_RESET);
+  if (Cond) {
+    std::string condStr = Cond->to_string();
+    if (condStr.find('\n') != std::string::npos) {
+      result += "\n";
+      ASTPrint::indentLevel++;
+      result += ASTPrint::indent() + condStr;
+      ASTPrint::indentLevel--;
+    } else {
+      result += condStr;
+    }
+  } else {
+    result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+  }
+  result += "\n";
+  
+  // Then block
+  bool hasElse = (Else != nullptr);
+  result += ASTPrint::indent() + (hasElse ? ASTPrint::BRANCH : ASTPrint::LAST_BRANCH);
+  result += std::string(COLOR_BLUE) + "Then: " + std::string(COLOR_RESET);
+  if (Then) {
+    std::string thenStr = Then->to_string();
+    if (thenStr.find('\n') != std::string::npos) {
+      result += "\n";
+      ASTPrint::indentLevel++;
+      result += ASTPrint::indent() + thenStr;
+      ASTPrint::indentLevel--;
+    } else {
+      result += thenStr;
+    }
+  } else {
+    result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+  }
+  
+  // Else block (if present)
+  if (hasElse) {
+    result += "\n" + ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+    result += std::string(COLOR_BLUE) + "Else: " + std::string(COLOR_RESET);
+    std::string elseStr = Else->to_string();
+    if (elseStr.find('\n') != std::string::npos) {
+      result += "\n";
+      ASTPrint::indentLevel++;
+      result += ASTPrint::indent() + elseStr;
+      ASTPrint::indentLevel--;
+    } else {
+      result += elseStr;
+    }
+  }
+  
+  ASTPrint::indentLevel--;
+  
+  return result;
+}
+
 };
 
 /// WhileExprAST - Expression class for while.
@@ -593,6 +851,29 @@ public:
   WhileExprAST(std::unique_ptr<ASTnode> cond, std::unique_ptr<ASTnode> body)
       : Cond(std::move(cond)), Body(std::move(body)) {}
 
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_MAGENTA) + "WhileStmt" + std::string(COLOR_RESET) + "\n";
+    
+    // Condition
+    result += ASTPrint::indent() + ASTPrint::BRANCH;
+    result += std::string(COLOR_BLUE) + "Condition:" + std::string(COLOR_RESET) + "\n";
+    ASTPrint::indentLevel++;
+    result += ASTPrint::indent() + (Cond ? Cond->to_string() : 
+             std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET));
+    ASTPrint::indentLevel--;
+    result += "\n";
+    
+    // Body
+    result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+    result += std::string(COLOR_BLUE) + "Body:" + std::string(COLOR_RESET) + "\n";
+    ASTPrint::indentLevel++;
+    result += ASTPrint::indent() + (Body ? Body->to_string() : 
+             std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET));
+    ASTPrint::indentLevel--;
+    
+    return result;
+  }
+
 };
 
 /// ReturnAST - Class for a return value
@@ -601,6 +882,33 @@ class ReturnAST : public ASTnode {
 
 public:
   ReturnAST(std::unique_ptr<ASTnode> value) : Val(std::move(value)) {}
+
+  virtual std::string to_string() const override {
+    if (Val) {
+      std::string result = std::string(COLOR_MAGENTA) + "ReturnStmt" + std::string(COLOR_RESET) + "\n";
+      
+      ASTPrint::indentLevel++;
+      result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+      result += std::string(COLOR_BLUE) + "Value: " + std::string(COLOR_RESET);
+      
+      std::string valStr = Val->to_string();
+      if (valStr.find('\n') != std::string::npos) {
+        result += "\n";
+        ASTPrint::indentLevel++;
+        result += ASTPrint::indent() + valStr;
+        ASTPrint::indentLevel--;
+      } else {
+        result += valStr;
+      }
+      
+      ASTPrint::indentLevel--;
+      
+      return result;
+    } else {
+      return std::string(COLOR_MAGENTA) + "ReturnStmt " + std::string(COLOR_RESET) + 
+            std::string(COLOR_YELLOW) + "(void)" + std::string(COLOR_RESET);
+    }
+  }
 
 };
 
@@ -634,6 +942,30 @@ std::unique_ptr<ASTnode> LogError(const char *Str) {
   return nullptr;
 }
 
+//===----------------------------------------------------------------------===//
+// AST Printing Helper
+//===----------------------------------------------------------------------===//
+
+static void printAST(const std::unique_ptr<ASTnode>& node, const std::string& label) {
+  if (!node) {
+    fprintf(stderr, "\n%s%s=== %s ===%s\n", 
+            COLOR_BOLD.c_str(), COLOR_RED.c_str(), label.c_str(), COLOR_RESET.c_str());
+    fprintf(stderr, "%sNode is nullptr!%s\n\n", COLOR_RED.c_str(), COLOR_RESET.c_str());
+    return;
+  }
+  
+  fprintf(stderr, "\n%s%s╔═══════════════════════════════════════╗%s\n", 
+          COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
+  fprintf(stderr, "%s%s║  %s%-35s%s%s║%s\n", 
+          COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str(), label.c_str(), 
+          COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
+  fprintf(stderr, "%s%s╚═══════════════════════════════════════╝%s\n\n", 
+          COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
+  
+  ASTPrint::indentLevel = 0;
+  fprintf(stderr, "%s\n\n", node->to_string().c_str());
+}
+
 /// BinaryExprAST - Expression class for binary operators
 class BinaryExprAST : public ASTnode {
   std::string Op;
@@ -646,6 +978,52 @@ public:
   const std::string &getOp() const {return Op;}
   std::unique_ptr<ASTnode> &getLHS() {return LHS; }
   std::unique_ptr<ASTnode> &getRHS() {return RHS; }
+
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_MAGENTA) + "BinaryExpr [" + 
+                        std::string(COLOR_BOLD) + Op + std::string(COLOR_RESET) + "]\n";
+    
+    ASTPrint::indentLevel++;
+    
+    // Print left operand
+    result += ASTPrint::indent() + ASTPrint::BRANCH;
+    result += std::string(COLOR_BLUE) + "LHS: " + std::string(COLOR_RESET);
+    if (LHS) {
+      std::string lhsStr = LHS->to_string();
+      if (lhsStr.find('\n') != std::string::npos) {
+        result += "\n";
+        ASTPrint::indentLevel++;
+        result += ASTPrint::indent() + lhsStr;
+        ASTPrint::indentLevel--;
+      } else {
+        result += lhsStr;
+      }
+    } else {
+      result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+    }
+    result += "\n";
+    
+    // Print right operand
+    result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+    result += std::string(COLOR_BLUE) + "RHS: " + std::string(COLOR_RESET);
+    if (RHS) {
+      std::string rhsStr = RHS->to_string();
+      if (rhsStr.find('\n') != std::string::npos) {
+        result += "\n";
+        ASTPrint::indentLevel++;
+        result += ASTPrint::indent() + rhsStr;
+        ASTPrint::indentLevel--;
+      } else {
+        result += rhsStr;
+      }
+    } else {
+      result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+    }
+    
+    ASTPrint::indentLevel--;
+    
+    return result;
+  }
 };
 
 /// UnaryExprAST - Expression class for unary operators
@@ -659,6 +1037,28 @@ public:
   
   const std::string &getOp() const { return Op; }
   std::unique_ptr<ASTnode> &getOperand() { return Operand; }
+
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_MAGENTA) + "UnaryExpr" + std::string(COLOR_RESET) + " [" + 
+                        std::string(COLOR_BOLD) + Op + std::string(COLOR_RESET) + "]\n";
+    
+    result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+    result += std::string(COLOR_BLUE) + "Operand: " + std::string(COLOR_RESET);
+    if (Operand) {
+      ASTPrint::indentLevel++;
+      std::string opStr = Operand->to_string();
+      if (opStr.find('\n') != std::string::npos) {
+        result += "\n" + ASTPrint::indent() + opStr;
+      } else {
+        result += opStr;
+      }
+      ASTPrint::indentLevel--;
+    } else {
+      result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+    }
+    
+    return result;
+  }
 };
 
 /// CallExprAST - Expression class for function calls
@@ -673,6 +1073,50 @@ public:
   
   const std::string &getCallee() const { return Callee; }
   std::vector<std::unique_ptr<ASTnode>> &getArgs() { return Args; }
+
+  virtual std::string to_string() const override {
+  std::string result = std::string(COLOR_MAGENTA) + "FunctionCall '" + 
+                      std::string(COLOR_BOLD) + Callee + std::string(COLOR_RESET) + "'\n";
+  
+  ASTPrint::indentLevel++;
+  
+  result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+  result += std::string(COLOR_BLUE) + "Arguments (" + std::to_string(Args.size()) + 
+           "):" + std::string(COLOR_RESET);
+  
+  if (Args.empty()) {
+    result += " " + std::string(COLOR_YELLOW) + "(none)" + std::string(COLOR_RESET);
+  } else {
+    result += "\n";
+    ASTPrint::indentLevel++;
+    for (size_t i = 0; i < Args.size(); i++) {
+      bool isLast = (i == Args.size() - 1);
+      result += ASTPrint::indent() + ASTPrint::treePrefix(isLast);
+      result += std::string(COLOR_BLUE) + "Arg[" + std::to_string(i) + "]: " + std::string(COLOR_RESET);
+      
+      if (Args[i]) {
+        std::string argStr = Args[i]->to_string();
+        if (argStr.find('\n') != std::string::npos) {
+          result += "\n";
+          ASTPrint::indentLevel++;
+          result += ASTPrint::indent() + argStr;
+          ASTPrint::indentLevel--;
+        } else {
+          result += argStr;
+        }
+      } else {
+        result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+      }
+      
+      if (!isLast) result += "\n";
+    }
+    ASTPrint::indentLevel--;
+  }
+  
+  ASTPrint::indentLevel--;
+  
+  return result;
+}
 };
 
 
@@ -688,6 +1132,37 @@ public:
   
   const std::string &getVarName() const { return VarName; }
   std::unique_ptr<ASTnode> &getRHS() { return RHS; }
+
+  virtual std::string to_string() const override {
+  std::string result = std::string(COLOR_MAGENTA) + "AssignmentExpr" + std::string(COLOR_RESET) + "\n";
+  
+  ASTPrint::indentLevel++;
+  
+  result += ASTPrint::indent() + ASTPrint::BRANCH;
+  result += std::string(COLOR_BLUE) + "Target: " + std::string(COLOR_RESET) + 
+           std::string(COLOR_BOLD) + VarName + std::string(COLOR_RESET) + "\n";
+  
+  result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+  result += std::string(COLOR_BLUE) + "Value: " + std::string(COLOR_RESET);
+  
+  if (RHS) {
+    std::string rhsStr = RHS->to_string();
+    if (rhsStr.find('\n') != std::string::npos) {
+      result += "\n";
+      ASTPrint::indentLevel++;
+      result += ASTPrint::indent() + rhsStr;
+      ASTPrint::indentLevel--;
+    } else {
+      result += rhsStr;
+    }
+  } else {
+    result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+  }
+  
+  ASTPrint::indentLevel--;
+  
+  return result;
+}
 };
 
 
@@ -753,19 +1228,24 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
   return param_list;
 }
 
+
+// param ::= var_type IDENT
 // param ::= var_type IDENT
 static std::unique_ptr<ParamAST> ParseParam() {
-
   std::string Type = CurTok.lexeme; // keep track of the type of the param
   getNextToken();                   // eat the type token
-  std::unique_ptr<ParamAST> P;
 
   if (CurTok.type == IDENT) { // parameter declaration
     std::string Name = CurTok.getIdentifierStr();
     getNextToken(); // eat "IDENT"
+    
+    // Actually create and return the parameter!
+    return std::make_unique<ParamAST>(Name, Type);
+  } else {
+    return LogError(CurTok, "expected identifier in parameter declaration"), nullptr;
   }
 
-  return P;
+  return nullptr;
 }
 
 // param_list ::= param param_list_prime
@@ -1546,14 +2026,20 @@ static std::unique_ptr<ASTnode> ParseDecl() {
       if (CurTok.type ==
           SC) {         // found ';' then this is a global variable declaration.
         getNextToken(); // eat ;
+        
         fprintf(stderr, "Parsed a variable declaration\n");
 
-        if (PrevTok.type != VOID_TOK)
-          return std::make_unique<GlobVarDeclAST>(std::move(ident),
-                                                  PrevTok.lexeme);
-        else
+        if (PrevTok.type != VOID_TOK) {
+          // Declare as ASTnode pointer
+          std::unique_ptr<ASTnode> globVar = std::make_unique<GlobVarDeclAST>(
+              std::move(ident), PrevTok.lexeme);
+          
+          printAST(globVar, "Global Variable: " + IdName);
+          return globVar;
+        } else {
           return LogError(PrevTok,
                           "Cannot have variable declaration with type 'void'");
+        }
       } else if (CurTok.type ==
                  LPAR) { // found '(' then this is a function declaration.
         getNextToken();  // eat (
@@ -1585,8 +2071,10 @@ static std::unique_ptr<ASTnode> ParseDecl() {
 
         auto Proto = std::make_unique<FunctionPrototypeAST>(
             IdName, PrevTok.lexeme, std::move(P));
-        return std::make_unique<FunctionDeclAST>(std::move(Proto),
-                                                 std::move(B));
+        std::unique_ptr<ASTnode> funcDecl = std::make_unique<FunctionDeclAST>(std::move(Proto),
+                                                                       std::move(B));
+        printAST(funcDecl, "Function: " + IdName);
+        return funcDecl;
       } else
         return LogError(CurTok, "expected ';' or ('");
     } else
@@ -1715,6 +2203,7 @@ static void ParseExternList() {
   }
 }
 
+
 // program ::= extern_list decl_list
 static void parser() {
   if (CurTok.type == EOF_TOK)
@@ -1739,9 +2228,14 @@ static std::unique_ptr<Module> TheModule;
 // AST Printer
 //===----------------------------------------------------------------------===//
 
+
+
+
+
 // void IntASTnode::display(int tabs) {
 //   printf("%s\n",getType().c_str());
 // }
+
 
 //===----------------------------------------------------------------------===//
 // Main driver code.
@@ -1763,11 +2257,12 @@ int main(int argc, char **argv) {
 
   // get the first token
   getNextToken();
-  while (CurTok.type != EOF_TOK) {
-    fprintf(stderr, "Token: %s with type %d\n", CurTok.lexeme.c_str(),
-            CurTok.type);
-    getNextToken();
-  }
+
+  //while (CurTok.type != EOF_TOK) {
+  //  fprintf(stderr, "Token: %s with type %d\n", CurTok.lexeme.c_str(),
+  //          CurTok.type);
+  //  getNextToken();
+  //}
   fprintf(stderr, "Lexer Finished\n");
 
   // Make the module, which holds all the code.
@@ -1776,8 +2271,8 @@ int main(int argc, char **argv) {
   // Run the parser now.
 
   /* UNCOMMENT : Task 2 - Parser */
-  //  parser();
-  //  fprintf(stderr, "Parsing Finished\n");  
+  parser();
+  fprintf(stderr, "Parsing Finished\n");  
 
   printf(
       "********************* FINAL IR (begin) ****************************\n");
