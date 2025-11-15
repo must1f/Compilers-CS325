@@ -476,6 +476,18 @@ static TOKEN getNextToken() {
 
 static void putBackToken(TOKEN tok) { tok_buffer.push_front(tok); }
 
+static TOKEN peekToken(int offset = 0) {
+  // Ensure we have enough tokens in the buffer
+  while (tok_buffer.size() <= static_cast<size_t>(offset)) {
+    tok_buffer.push_back(gettok());
+  }
+  return tok_buffer[offset];
+}
+
+static TOKEN peekNextToken() {
+  return peekToken(0);
+}
+
 /// ASTnode - Base class for all AST nodes.
 class ASTnode {
 
@@ -1620,33 +1632,40 @@ static std::unique_ptr<ASTnode> ParseOrExpr() {
 }
 
 
-// expr ::= IDENT "=" expr
-//      | rval
-// rval ::= or_expr
+/// ParseExper - Parse an expression with LL(2) lookahead.
+///
+/// Grammar:
+///   expr ::= IDENT "=" expr
+///         |  or_expr
+///
+/// This production requires LL(2) lookahead because both alternatives
+/// begin with IDENT. We must peek at the second token to decide:
+///   - FIRST₂(IDENT "=" expr) = {(IDENT, =)}
+///   - FIRST₂(or_expr)        = {(IDENT, +), (IDENT, *), ...}
+///
+/// Implementation uses explicit lookahead rather than backtracking
+/// for proper predictive parsing.
 static std::unique_ptr<ASTnode> ParseExper() {
+  // LL(2) disambiguation: Check if this is an assignment
   if (CurTok.type == IDENT) {
-    // Save the identifier
-    std::string varName = CurTok.getIdentifierStr();
-    TOKEN varTok = CurTok;
+    TOKEN nextTok = peekNextToken();
     
-    getNextToken(); // eat identifier
-    
-    // Check if next token is '='
-    if (CurTok.type == ASSIGN) {
-      getNextToken(); // eat '='
+    if (nextTok.type == ASSIGN) {
+      // Production: expr ::= IDENT "=" expr
+      std::string varName = CurTok.getIdentifierStr();
+      getNextToken(); // consume IDENT
+      getNextToken(); // consume '='
       
       auto RHS = ParseExper();
       if (!RHS)
         return nullptr;
       
       return std::make_unique<AssignmentExprAST>(varName, std::move(RHS));
-    } else {
-      putBackToken(CurTok);
-      CurTok = varTok;
-      
     }
+    // else: Fall through to parse as or_expr
   }
-
+  
+  // Production: expr ::= or_expr
   return ParseOrExpr();
 }
 
