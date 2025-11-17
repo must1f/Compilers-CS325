@@ -1,0 +1,418 @@
+Gathering compiler information...
+Generated on: Sun 16 Nov 16:45:12 GMT 2025
+=========================================================================
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    PART 1: TEST SOURCE FILES                          ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+═════════════════════════════════════════════════════════════════════════
+TEST: null.c (Simplest Test)
+═════════════════════════════════════════════════════════════════════════
+// MiniC program to test null file
+
+
+
+
+═════════════════════════════════════════════════════════════════════════
+TEST: addition.c
+═════════════════════════════════════════════════════════════════════════
+// MiniC program to test addition
+extern int print_int(int X);
+
+int addition(int n, int m){
+	int result;
+	result = n + m;
+  
+
+  if(n == 4) {
+    print_int(n+m);
+  }
+  else {
+    print_int(n*m);
+  }
+
+  return result;
+}
+
+
+
+═════════════════════════════════════════════════════════════════════════
+TEST: factorial.c
+═════════════════════════════════════════════════════════════════════════
+// MiniC program to compute the factorial of a number
+int factorial(int n)
+{
+    int i;
+    int factorial;
+
+    factorial = 1;
+    i = 1;
+
+    while (i<=n) {
+      factorial = factorial * i;              // factorial = factorial*i;
+      i = i + 1 ;
+    }
+    
+    return factorial;
+}
+
+═════════════════════════════════════════════════════════════════════════
+TEST: while.c
+═════════════════════════════════════════════════════════════════════════
+// MiniC program to test while loop
+
+extern int print_int(int X);
+
+int test;
+float f;
+bool b;
+
+int While(int n){
+  int result;
+  test = 11 + 1;
+  result = 0;
+  print_int(test); 
+  while(result < 10)
+    result = result + 1;  
+    //print_int(result);    
+   
+  return result;
+}
+
+═════════════════════════════════════════════════════════════════════════
+TEST: unary.c
+═════════════════════════════════════════════════════════════════════════
+// MiniC program to test unary operator (-)
+extern int print_int(int X);
+extern float print_float(float X);
+
+float unary(int n, float m){
+        float result;
+        float sum;
+       
+        sum = 0.0;
+	
+	result = n + m;  
+	print_float(result);
+        sum = sum + result;
+
+	result = n + -m;  
+	print_float(result);
+        sum = sum + result;
+
+	result = n + --m;  
+	print_float(result);
+        sum = sum + result;
+
+	result = -n + -m;  
+	print_float(result);
+        sum = sum + result;
+
+  return sum;
+}
+
+
+
+═════════════════════════════════════════════════════════════════════════
+TEST: pi.c (Float operations)
+═════════════════════════════════════════════════════════════════════════
+// MiniC program to compute the value of pi
+
+float pi() {
+
+  bool flag;
+  float PI;
+  int i;
+
+  flag = true;
+  PI = 3.0;
+  i = 2;
+
+  while(i < 100) {
+    
+    if(flag) {
+      PI = PI + (4.0 / (i*(i+1)*(i+2)));
+      //flag = false;
+    }
+    else {
+      PI = PI - (4.0 / (i*(i+1)*(i+2)));
+      //flag = true;
+    }
+    flag = !flag;
+    i = i+2;
+  }
+
+  return PI;
+}
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    PART 2: REFERENCE LLVM IR                          ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: addition/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: factorial/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: while/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: unary/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: pi/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: cosine/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: void/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: recurse/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: rfact/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: palindrome/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+═════════════════════════════════════════════════════════════════════════
+REFERENCE IR: leap/output.ll
+═════════════════════════════════════════════════════════════════════════
+; ModuleID = 'mini-c'
+source_filename = "mini-c"
+
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    PART 3: DRIVER FILES                               ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+═════════════════════════════════════════════════════════════════════════
+DRIVER: addition/driver.cpp
+═════════════════════════════════════════════════════════════════════════
+#include <iostream>
+#include <cstdio>
+
+// clang++ driver.cpp addition.ll -o add
+
+#ifdef _WIN32
+#define DLLEXPORT __declspec(dllexport)
+#else
+#define DLLEXPORT
+#endif
+
+extern "C" DLLEXPORT int print_int(int X) {
+  fprintf(stderr, "%d\n", X);
+  return 0;
+}
+
+extern "C" DLLEXPORT float print_float(float X) {
+  fprintf(stderr, "%f\n", X);
+  return 0;
+}
+
+extern "C" {
+    int addition(int n, int m);
+}
+
+int main() {
+    if(addition(6, 3) == 9) 
+      std::cout << "PASSED Result: " << addition(6, 3) << std::endl;
+  	else 
+  	  std::cout << "FAILED Result: " << addition(6, 3) << std::endl;
+}
+
+═════════════════════════════════════════════════════════════════════════
+DRIVER: factorial/driver.cpp
+═════════════════════════════════════════════════════════════════════════
+#include <iostream>
+#include <cstdio>
+
+// clang++ driver.cpp factorial.ll -o fact
+
+
+#ifdef _WIN32
+#define DLLEXPORT __declspec(dllexport)
+#else
+#define DLLEXPORT
+#endif
+
+extern "C" DLLEXPORT int print_int(int X) {
+  fprintf(stderr, "%d\n", X);
+  return 0;
+}
+
+extern "C" DLLEXPORT float print_float(float X) {
+  fprintf(stderr, "%f\n", X);
+  return 0;
+}
+
+extern "C" {
+    int factorial(int n);
+}
+
+int main() {
+    
+    if(factorial(10) == 3628800) 
+      std::cout << "PASSED Result: " << factorial(10) << std::endl;
+  	else 
+  	  std::cout << "FAILED Result: " << factorial(10) << std::endl;
+}
+
+═════════════════════════════════════════════════════════════════════════
+DRIVER: while/driver.cpp
+═════════════════════════════════════════════════════════════════════════
+#include <iostream>
+#include <cstdio>
+
+// clang++ driver.cpp While.l -o while
+
+#ifdef _WIN32
+#define DLLEXPORT __declspec(dllexport)
+#else
+#define DLLEXPORT
+#endif
+
+extern "C" DLLEXPORT int print_int(int X) {
+  fprintf(stderr, "%d\n", X);
+  return 0;
+}
+
+extern "C" DLLEXPORT float print_float(float X) {
+  fprintf(stderr, "%f\n", X);
+  return 0;
+}
+
+extern "C" {
+    int While(int n);
+}
+
+int main() {
+    if (While(1) == 10) {
+    	std::cout << "PASSED Result: " << While(1) << std::endl;
+    }
+    else {
+    	std::cout << "FAILED Result: " << While(1) << std::endl;
+    }
+    
+}
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    PART 4: SUMMARY STATISTICS                         ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+Test directories found:
+17
+
+Tests with reference output.ll:
+12
+
+List of all test directories:
+addition
+array_addition
+array_func_arg_1d
+cosine
+factorial
+fibonacci
+global_array
+leap
+matrix_multiplication
+null
+palindrome
+pi
+recurse
+rfact
+unary
+void
+while
+
+Tests WITH reference IR:
+addition
+cosine
+factorial
+fibonacci
+leap
+palindrome
+pi
+recurse
+rfact
+unary
+void
+while
+
+Tests WITHOUT reference IR (need to generate):
+array_addition
+array_func_arg_1d
+global_array
+matrix_multiplication
+null
+
+
+╔═══════════════════════════════════════════════════════════════════════╗
+║                    PART 5: CURRENT COMPILER STATE                     ║
+╚═══════════════════════════════════════════════════════════════════════╝
+
+Checking for critical infrastructure in mccomp.cpp:
+
+Global variables declared:
+2242:static LLVMContext TheContext;
+2243:static IRBuilder<> Builder(TheContext);
+2244:static std::unique_ptr<Module> TheModule;
+
+Symbol tables (should be MISSING):
+
+Type helper function (should be MISSING):
+
+Codegen methods implemented:
+
+
+═════════════════════════════════════════════════════════════════════════
+Analysis complete. Total lines: 416
+═════════════════════════════════════════════════════════════════════════
