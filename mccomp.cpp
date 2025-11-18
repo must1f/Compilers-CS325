@@ -2937,14 +2937,20 @@ Value* BinaryExprAST::codegen() {
                            "Got: " + getTypeName(OpType));
             return nullptr;
         }
-    }
+      }
     
     if (Op == "<") {
-        DEBUG_CODEGEN("  Creating less than comparison");
-        if (OpType->isFloatingPointTy())
-            return Builder.CreateFCmpOLT(L, R, "flt");
-        else if (OpType->isIntegerTy())
-            return Builder.CreateICmpSLT(L, R, "lt");
+    DEBUG_CODEGEN("  Creating less than comparison");
+    if (OpType->isFloatingPointTy())
+        return Builder.CreateFCmpOLT(L, R, "flt");
+    else if (OpType->isIntegerTy())
+        return Builder.CreateICmpSLT(L, R, "lt");
+    else {
+        std::string msg = "Invalid operand types for operator '<'";
+        LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                       "Got: " + getTypeName(OpType));
+        return nullptr;
+      }
     }
 
     if (Op == "<=") {
@@ -2953,6 +2959,12 @@ Value* BinaryExprAST::codegen() {
             return Builder.CreateFCmpOLE(L, R, "fle");
         else if (OpType->isIntegerTy())
             return Builder.CreateICmpSLE(L, R, "le");
+        else {
+            std::string msg = "Invalid operand types for operator '<='";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                          "Got: " + getTypeName(OpType));
+            return nullptr;
+        }
     }
 
     if (Op == ">") {
@@ -2961,6 +2973,12 @@ Value* BinaryExprAST::codegen() {
             return Builder.CreateFCmpOGT(L, R, "fgt");
         else if (OpType->isIntegerTy())
             return Builder.CreateICmpSGT(L, R, "gt");
+        else {
+            std::string msg = "Invalid operand types for operator '>'";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                          "Got: " + getTypeName(OpType));
+            return nullptr;
+        }
     }
 
     if (Op == ">=") {
@@ -2969,6 +2987,12 @@ Value* BinaryExprAST::codegen() {
             return Builder.CreateFCmpOGE(L, R, "fge");
         else if (OpType->isIntegerTy())
             return Builder.CreateICmpSGE(L, R, "ge");
+        else {
+            std::string msg = "Invalid operand types for operator '>='";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                          "Got: " + getTypeName(OpType));
+            return nullptr;
+        }
     }
 
     if (Op == "==") {
@@ -2977,6 +3001,12 @@ Value* BinaryExprAST::codegen() {
             return Builder.CreateFCmpOEQ(L, R, "feq");
         else if (OpType->isIntegerTy())
             return Builder.CreateICmpEQ(L, R, "eq");
+        else {
+            std::string msg = "Invalid operand types for operator '=='";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                          "Got: " + getTypeName(OpType));
+            return nullptr;
+        }
     }
 
     if (Op == "!=") {
@@ -2985,6 +3015,12 @@ Value* BinaryExprAST::codegen() {
             return Builder.CreateFCmpONE(L, R, "fne");
         else if (OpType->isIntegerTy())
             return Builder.CreateICmpNE(L, R, "ne");
+        else {
+            std::string msg = "Invalid operand types for operator '!='";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                          "Got: " + getTypeName(OpType));
+            return nullptr;
+        }
     }
     
     if (Op == "&&") {
@@ -3016,22 +3052,30 @@ Value* UnaryExprAST::codegen() {
         return nullptr;
     }
     
-    DEBUG_VERBOSE("  Operand type: " + getTypeName(OperandV->getType()));
+    Type* OpType = OperandV->getType();
+    DEBUG_VERBOSE("  Operand type: " + getTypeName(OpType));
     
     if (Op == "-") {
-        Type* OpType = OperandV->getType();
         if (OpType->isFloatingPointTy()) {
             DEBUG_CODEGEN("  Creating floating-point negation");
             return Builder.CreateFNeg(OperandV, "fneg");
-        } else if (OpType->isIntegerTy()) {
+        } else if (OpType->isIntegerTy(32)) {
             DEBUG_CODEGEN("  Creating integer negation");
             return Builder.CreateNeg(OperandV, "neg");
+        } else {
+            std::string msg = "Unary operator '-' requires numeric operand";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "Got: " + getTypeName(OpType));
+            return nullptr;
         }
     }
     
     if (Op == "!") {
         DEBUG_CODEGEN("  Creating logical NOT");
         OperandV = castToType(OperandV, Type::getInt1Ty(TheContext));
+        if (!OperandV) {
+            return LogErrorV("Cannot convert operand to boolean for '!' operator");
+        }
         return Builder.CreateNot(OperandV, "not");
     }
     
@@ -3281,26 +3325,61 @@ Value* WhileExprAST::codegen() {
 
 /// ReturnAST::codegen - Generate code for return statements
 Value* ReturnAST::codegen() {
-    if (Val) {
-        Value* RetVal = Val->codegen();
-        if (!RetVal)
-            return nullptr;
-        
-        // Type check against function return type
-        Function* TheFunction = Builder.GetInsertBlock()->getParent();
-        Type* FuncRetType = TheFunction->getReturnType();
-        
-        if (RetVal->getType() != FuncRetType) {
-            RetVal = castToType(RetVal, FuncRetType);
-            if (!RetVal)
-                return LogErrorV("Return type mismatch");
+    DEBUG_CODEGEN("Generating return statement");
+    
+    Function* TheFunction = Builder.GetInsertBlock()->getParent();
+    Type* FuncRetType = TheFunction->getReturnType();
+    
+    // Case 1: Void return
+    if (!Val) {
+        if (!FuncRetType->isVoidTy()) {
+            DEBUG_CODEGEN("  ERROR: Non-void function must return a value");
+            return LogErrorV("Non-void function '" + 
+                           TheFunction->getName().str() + 
+                           "' must return a value");
         }
-        
-        return Builder.CreateRet(RetVal);
-    } else {
-        // Void return
+        DEBUG_CODEGEN("  Creating void return");
         return Builder.CreateRetVoid();
     }
+    
+    // Case 2: Value return
+    if (FuncRetType->isVoidTy()) {
+        DEBUG_CODEGEN("  ERROR: Void function cannot return a value");
+        return LogErrorV("Void function '" + 
+                       TheFunction->getName().str() + 
+                       "' cannot return a value");
+    }
+    
+    Value* RetVal = Val->codegen();
+    if (!RetVal)
+        return nullptr;
+    
+    Type* RetType = RetVal->getType();
+    DEBUG_VERBOSE("  Return value type: " + getTypeName(RetType));
+    DEBUG_VERBOSE("  Function return type: " + getTypeName(FuncRetType));
+    
+    if (RetType != FuncRetType) {
+        // Check if this is a narrowing conversion (NOT ALLOWED per spec)
+        if (isNarrowingConversion(RetType, FuncRetType)) {
+            DEBUG_CODEGEN("  ERROR: Narrowing conversion in return");
+            std::string msg = "Return type mismatch in function '" + 
+                            TheFunction->getName().str() + 
+                            "' - narrowing conversion not allowed";
+            return LogTypeError(msg, FuncRetType, RetType);
+        }
+        
+        // Widening conversion (ALLOWED per spec)
+        DEBUG_VERBOSE("  Applying widening conversion");
+        RetVal = castToType(RetVal, FuncRetType, /*allowNarrowing=*/false);
+        if (!RetVal) {
+            DEBUG_CODEGEN("  ERROR: Type conversion failed");
+            return LogTypeError("Cannot convert return value type", 
+                              FuncRetType, RetType);
+        }
+    }
+    
+    DEBUG_CODEGEN("  Return successful");
+    return Builder.CreateRet(RetVal);
 }
 
 /// BlockAST::codegen - Generate code for blocks
