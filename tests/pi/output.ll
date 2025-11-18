@@ -32,9 +32,9 @@ then:                                             ; preds = %body
   %i6 = load i32, ptr %i, align 4
   %add7 = add i32 %i6, 2
   %mul8 = mul i32 %mul, %add7
-  %itof = sitofp i32 %mul8 to double
-  %fdiv = fdiv double 4.000000e+00, %itof
-  %fadd = fadd float %PI3, double %fdiv
+  %itof = sitofp i32 %mul8 to float
+  %fdiv = fdiv float 4.000000e+00, %itof
+  %fadd = fadd float %PI3, %fdiv
   store float %fadd, ptr %PI, align 4
   br label %ifcont
 
@@ -47,9 +47,9 @@ else:                                             ; preds = %body
   %i14 = load i32, ptr %i, align 4
   %add15 = add i32 %i14, 2
   %mul16 = mul i32 %mul13, %add15
-  %itof17 = sitofp i32 %mul16 to double
-  %fdiv18 = fdiv double 4.000000e+00, %itof17
-  %fsub = fsub float %PI9, double %fdiv18
+  %itof17 = sitofp i32 %mul16 to float
+  %fdiv18 = fdiv float 4.000000e+00, %itof17
+  %fsub = fsub float %PI9, %fdiv18
   store float %fsub, ptr %PI, align 4
   br label %ifcont
 

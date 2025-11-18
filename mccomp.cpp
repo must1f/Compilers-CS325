@@ -2358,7 +2358,8 @@ Value* IntASTnode::codegen() {
 
 /// FloatASTnode::codegen - Generate LLVM IR for float literals
 Value* FloatASTnode::codegen() {
-    return ConstantFP::get(Type::getFloatTy(TheContext), APFloat(Val));
+    // **FIX: Explicitly use Type::getFloatTy to create f32 constants**
+    return ConstantFP::get(Type::getFloatTy(TheContext), APFloat((float)Val));
 }
 
 /// BoolASTnode::codegen - Generate LLVM IR for boolean literals
@@ -2414,44 +2415,41 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true) {
     
     // Check for narrowing conversion
     if (!allowNarrowing && isNarrowingConversion(SrcTy, DestTy)) {
-        return nullptr; // Narrowing not allowed
+        return nullptr;
     }
     
-    // int to float (widening - allowed)
+    // int to float (widening)
     if (SrcTy->isIntegerTy(32) && DestTy->isFloatTy()) {
         return Builder.CreateSIToFP(V, DestTy, "itof");
     }
     
-    // bool to int (widening - allowed)
+    // bool to int (widening)
     if (SrcTy->isIntegerTy(1) && DestTy->isIntegerTy(32)) {
         return Builder.CreateZExt(V, DestTy, "btoi");
     }
     
-    // bool to float (widening through int - allowed)
+    // bool to float (widening through int)
     if (SrcTy->isIntegerTy(1) && DestTy->isFloatTy()) {
         Value* AsInt = Builder.CreateZExt(V, Type::getInt32Ty(TheContext), "btoi");
         return Builder.CreateSIToFP(AsInt, DestTy, "itof");
     }
     
-    // ADDED: Floating point conversions (f32 <-> f64). This handles unexpected f64 results.
-    if (SrcTy->isFloatingPointTy() && DestTy->isFloatingPointTy()) {
-        if (SrcTy->getPrimitiveSizeInBits() > DestTy->getPrimitiveSizeInBits()) {
-            // Narrowing: f64 -> f32 (Truncation)
-            return Builder.CreateFPTrunc(V, DestTy, "fptrunc");
-        } else if (SrcTy->getPrimitiveSizeInBits() < DestTy->getPrimitiveSizeInBits()) {
-            // Widening: f32 -> f64 (Extension)
-            return Builder.CreateFPExt(V, DestTy, "fpext");
-        }
-        // If types are different LLVM objects but same size (e.g., f32 <-> f32), return original value
-        return V; 
+    // **FIX: Handle f64 → f32 conversion (from APFloat operations)**
+    if (SrcTy->isDoubleTy() && DestTy->isFloatTy()) {
+        return Builder.CreateFPTrunc(V, DestTy, "fptrunc");
     }
     
-    // int/float to bool for conditionals (allowed even though narrowing)
+    // **FIX: Handle f32 → f64 conversion (shouldn't happen but be safe)**
+    if (SrcTy->isFloatTy() && DestTy->isDoubleTy()) {
+        return Builder.CreateFPExt(V, DestTy, "fpext");
+    }
+    
+    // int/float to bool for conditionals
     if (DestTy->isIntegerTy(1)) {
         if (SrcTy->isIntegerTy(32)) {
             return Builder.CreateICmpNE(V, ConstantInt::get(SrcTy, 0), "tobool");
         }
-        if (SrcTy->isFloatTy()) {
+        if (SrcTy->isFloatTy() || SrcTy->isDoubleTy()) {
             return Builder.CreateFCmpONE(V, ConstantFP::get(SrcTy, 0.0), "tobool");
         }
     }
@@ -2467,14 +2465,20 @@ static void promoteTypes(Value*& L, Value*& R) {
     if (LTy == RTy)
         return;
     
-    // Determine if either is a floating-point type
-    bool LIsFloat = LTy->isFloatingPointTy();
-    bool RIsFloat = RTy->isFloatingPointTy();
+    // **FIX: Normalize f64 to f32 first**
+    if (LTy->isDoubleTy()) {
+        L = Builder.CreateFPTrunc(L, Type::getFloatTy(TheContext), "fptrunc");
+        LTy = L->getType();
+    }
+    if (RTy->isDoubleTy()) {
+        R = Builder.CreateFPTrunc(R, Type::getFloatTy(TheContext), "fptrunc");
+        RTy = R->getType();
+    }
     
-    // Promote integer to the existing floating-point type (f32 or f64)
-    if (LIsFloat && RTy->isIntegerTy(32)) { 
+    // Now promote to float if either is float
+    if (LTy->isFloatTy() && RTy->isIntegerTy(32)) {
         R = Builder.CreateSIToFP(R, LTy, "itof");
-    } else if (RIsFloat && LTy->isIntegerTy(32)) {
+    } else if (RTy->isFloatTy() && LTy->isIntegerTy(32)) {
         L = Builder.CreateSIToFP(L, RTy, "itof");
     }
     // Promote bool to int if needed
@@ -2483,11 +2487,11 @@ static void promoteTypes(Value*& L, Value*& R) {
     } else if (RTy->isIntegerTy(32) && LTy->isIntegerTy(1)) {
         L = Builder.CreateZExt(L, RTy, "btoi");
     }
-    // Promote bool to float/double through int if needed
-    else if (LIsFloat && RTy->isIntegerTy(1)) {
+    // Promote bool to float through int
+    else if (LTy->isFloatTy() && RTy->isIntegerTy(1)) {
         R = Builder.CreateZExt(R, Type::getInt32Ty(TheContext), "btoi");
         R = Builder.CreateSIToFP(R, LTy, "itof");
-    } else if (RIsFloat && LTy->isIntegerTy(1)) {
+    } else if (RTy->isFloatTy() && LTy->isIntegerTy(1)) {
         L = Builder.CreateZExt(L, Type::getInt32Ty(TheContext), "btoi");
         L = Builder.CreateSIToFP(L, RTy, "itof");
     }
