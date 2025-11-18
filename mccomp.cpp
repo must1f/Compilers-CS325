@@ -2900,17 +2900,15 @@ static Type* getValueType(Value* V) {
 /// isNarrowingConversion - Check if conversion from From to To is narrowing
 static bool isNarrowingConversion(Type* From, Type* To) {
     if (!From || !To) return false;
+    if (From == To) return false;
     
-    // float to int is narrowing
-    if (From->isFloatTy() && To->isIntegerTy())
+    if (From->isFloatTy() && To->isIntegerTy(32))
         return true;
-    
-    // int to bool is narrowing (but allowed in conditionals)
     if (From->isIntegerTy(32) && To->isIntegerTy(1))
         return true;
-    
-    // double to float is narrowing
     if (From->isDoubleTy() && To->isFloatTy())
+        return true;
+    if (From->isFloatTy() && To->isIntegerTy(1))
         return true;
     
     return false;
