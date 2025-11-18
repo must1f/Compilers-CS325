@@ -349,12 +349,52 @@ static std::string getTypeName(Type* T) {
     return typeStr;
 }
 
+struct TypeInfo {
+    std::string typeName;  // "int", "float", "bool", "void"
+    bool isGlobal;
+    int line;
+    int column;
+    
+    TypeInfo() : typeName("unknown"), isGlobal(false), line(-1), column(-1) {}
+    TypeInfo(const std::string& name, bool global = false, int l = -1, int c = -1)
+        : typeName(name), isGlobal(global), line(l), column(c) {}
+};
+
+
+
+static std::map<std::string, TypeInfo> SymbolTypeTable;
+
+/// TypeInfo - Structure to hold type information
+
+/// getTypeInfo - Get type information for a variable
+static TypeInfo* getTypeInfo(const std::string& varName) {
+    auto it = SymbolTypeTable.find(varName);
+    if (it != SymbolTypeTable.end()) {
+        return &it->second;
+    }
+    return nullptr;
+}
+
 static void DUMP_SYMBOL_TABLE() {
     if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
         fprintf(stderr, "\n%s[SYMBOL TABLE DUMP]%s\n", 
                 COLOR_CYAN.c_str(), COLOR_RESET.c_str());
         
-        fprintf(stderr, "  Local Variables:\n");
+        fprintf(stderr, "  Symbol Type Table:\n");
+        if (SymbolTypeTable.empty()) {
+            fprintf(stderr, "    (empty)\n");
+        } else {
+            for (const auto& pair : SymbolTypeTable) {
+                fprintf(stderr, "    %s: %s (%s) [line:%d, col:%d]\n",
+                        pair.first.c_str(),
+                        pair.second.typeName.c_str(),
+                        pair.second.isGlobal ? "global" : "local",
+                        pair.second.line,
+                        pair.second.column);
+            }
+        }
+        
+        fprintf(stderr, "  Local Variables (NamedValues):\n");
         if (NamedValues.empty()) {
             fprintf(stderr, "    (empty)\n");
         } else {
@@ -366,7 +406,7 @@ static void DUMP_SYMBOL_TABLE() {
             }
         }
         
-        fprintf(stderr, "  Global Variables:\n");
+        fprintf(stderr, "  Global Variables (GlobalValues):\n");
         if (GlobalValues.empty()) {
             fprintf(stderr, "    (empty)\n");
         } else {
@@ -392,6 +432,8 @@ static void DUMP_SYMBOL_TABLE() {
         if (!hasFunctions) {
             fprintf(stderr, "    (empty)\n");
         }
+        
+        fprintf(stderr, "  Current Context: %s\n", CurrentContext.toString().c_str());
         fprintf(stderr, "\n");
     }
 }
@@ -2711,39 +2753,154 @@ Value* BoolASTnode::codegen() {
     return ConstantInt::get(Type::getInt1Ty(TheContext), APInt(1, Bool ? 1 : 0, false));
 }
 
+/// checkVariableInScope - Check if variable is in scope and return its type
+static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1, int col = -1) {
+    DEBUG_CODEGEN("Checking scope for variable: " + varName);
+    
+    // Check local scope first
+    if (NamedValues.find(varName) != NamedValues.end()) {
+        TypeInfo* info = getTypeInfo(varName);
+        if (info) {
+            DEBUG_CODEGEN("  Found in local scope: " + info->typeName);
+            return info;
+        }
+    }
+    
+    // Check global scope
+    if (GlobalValues.find(varName) != GlobalValues.end()) {
+        TypeInfo* info = getTypeInfo(varName);
+        if (info) {
+            DEBUG_CODEGEN("  Found in global scope: " + info->typeName);
+            return info;
+        }
+    }
+    
+    // Variable not found
+    DEBUG_CODEGEN("  ERROR: Variable not found in any scope");
+    std::string msg = "Undefined variable '" + varName + "'";
+    if (CurrentContext.currentFunction.empty()) {
+        msg += " in global scope";
+    } else {
+        msg += " in function '" + CurrentContext.currentFunction + "'";
+    }
+    LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg, line, col);
+    return nullptr;
+}
+
 /// VariableASTnode::codegen - Generate LLVM IR for variable references
 Value* VariableASTnode::codegen() {
     DEBUG_CODEGEN("Loading variable: " + Name);
     
+    // Check scope and get type information
+    TypeInfo* typeInfo = checkVariableInScope(Name, Tok.lineNo, Tok.columnNo);
+    if (!typeInfo) {
+        // Error already logged by checkVariableInScope
+        DUMP_SYMBOL_TABLE();
+        return nullptr;
+    }
+    
+    // Try local scope first
     AllocaInst* V = NamedValues[Name];
     if (V) {
         DEBUG_CODEGEN("  Found in local scope: " + getTypeName(V->getAllocatedType()));
+        DEBUG_CODEGEN("  Type from symbol table: " + typeInfo->typeName);
+        
+        // Verify type consistency
+        Type* expectedType = getTypeFromString(typeInfo->typeName);
+        if (V->getAllocatedType() != expectedType) {
+            LogCompilerError(ErrorType::SEMANTIC_TYPE,
+                           "Type mismatch for variable '" + Name + "'",
+                           Tok.lineNo, Tok.columnNo);
+            return nullptr;
+        }
+        
         return Builder.CreateLoad(V->getAllocatedType(), V, Name.c_str());
     }
     
+    // Try global scope
     GlobalVariable* GV = GlobalValues[Name];
     if (GV) {
         DEBUG_CODEGEN("  Found in global scope: " + getTypeName(GV->getValueType()));
+        DEBUG_CODEGEN("  Type from symbol table: " + typeInfo->typeName);
+        
+        // Verify type consistency
+        Type* expectedType = getTypeFromString(typeInfo->typeName);
+        if (GV->getValueType() != expectedType) {
+            LogCompilerError(ErrorType::SEMANTIC_TYPE,
+                           "Type mismatch for global variable '" + Name + "'",
+                           Tok.lineNo, Tok.columnNo);
+            return nullptr;
+        }
+        
         return Builder.CreateLoad(GV->getValueType(), GV, Name.c_str());
     }
     
-    DEBUG_CODEGEN("  ERROR: Variable not found!");
+    // Should never reach here if checkVariableInScope worked correctly
+    DEBUG_CODEGEN("  INTERNAL ERROR: Variable found in symbol table but not in scope maps");
     DUMP_SYMBOL_TABLE();
-    
-    return LogScopeError(Name, CurrentContext.toString());
+    return nullptr;
 }
 
 //===----------------------------------------------------------------------===//
 // Type Conversion Helpers
 //===----------------------------------------------------------------------===//
 
+//===----------------------------------------------------------------------===//
+// Enhanced Type System
+//===----------------------------------------------------------------------===//
+
+
+
+
+
+
+/// registerVariable - Register a variable in the symbol table with type info
+static void registerVariable(const std::string& varName, const std::string& typeName, 
+                             bool isGlobal = false, int line = -1, int col = -1) {
+    SymbolTypeTable[varName] = TypeInfo(typeName, isGlobal, line, col);
+    DEBUG_VERBOSE("Registered variable '" + varName + "' with type '" + typeName + 
+                 "' (global: " + (isGlobal ? "yes" : "no") + ")");
+}
+
+
+
+/// checkFunctionExists - Check if function is declared
+static Function* checkFunctionExists(const std::string& funcName, int line = -1, int col = -1) {
+    DEBUG_CODEGEN("Checking function: " + funcName);
+    
+    Function* F = TheModule->getFunction(funcName);
+    if (!F) {
+        DEBUG_CODEGEN("  ERROR: Function not found");
+        std::string msg = "Call to undefined function '" + funcName + "'";
+        
+        // Provide suggestions for similar function names
+        std::string suggestion;
+        for (auto& Fn : TheModule->functions()) {
+            std::string fnName = Fn.getName().str();
+            if (fnName.find(funcName.substr(0, std::min((size_t)3, funcName.length()))) != std::string::npos) {
+                suggestion = "\n  Did you mean '" + fnName + "'?";
+                break;
+            }
+        }
+        
+        LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg + suggestion, line, col);
+        return nullptr;
+    }
+    
+    DEBUG_CODEGEN("  Function found: " + getTypeName(F->getFunctionType()));
+    return F;
+}
+
 /// getValueType - Get the LLVM type of a Value
 static Type* getValueType(Value* V) {
+    if (!V) return nullptr;
     return V->getType();
 }
 
-/// checkNarrowingConversion - Check if conversion from From to To is narrowing
+/// isNarrowingConversion - Check if conversion from From to To is narrowing
 static bool isNarrowingConversion(Type* From, Type* To) {
+    if (!From || !To) return false;
+    
     // float to int is narrowing
     if (From->isFloatTy() && To->isIntegerTy())
         return true;
@@ -2752,60 +2909,149 @@ static bool isNarrowingConversion(Type* From, Type* To) {
     if (From->isIntegerTy(32) && To->isIntegerTy(1))
         return true;
     
+    // double to float is narrowing
+    if (From->isDoubleTy() && To->isFloatTy())
+        return true;
+    
     return false;
 }
 
+/// isWideningConversion - Check if conversion is widening (safe)
+static bool isWideningConversion(Type* From, Type* To) {
+    if (!From || !To) return false;
+    
+    // int to float is widening
+    if (From->isIntegerTy(32) && To->isFloatTy())
+        return true;
+    
+    // bool to int is widening
+    if (From->isIntegerTy(1) && To->isIntegerTy(32))
+        return true;
+    
+    // bool to float is widening (through int)
+    if (From->isIntegerTy(1) && To->isFloatTy())
+        return true;
+    
+    // float to double is widening
+    if (From->isFloatTy() && To->isDoubleTy())
+        return true;
+    
+    return false;
+}
 
-/// castToType - Perform implicit type conversions with narrowing detection
-static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true) {
+/// castToType - Perform type conversions with proper checking
+static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true, 
+                         const std::string& context = "") {
+    if (!V || !DestTy) {
+        DEBUG_CODEGEN("  ERROR: Null value or type in castToType");
+        return nullptr;
+    }
+    
     Type* SrcTy = V->getType();
     
     if (SrcTy == DestTy)
         return V;
     
+    DEBUG_VERBOSE("  Type conversion needed: " + getTypeName(SrcTy) + " -> " + getTypeName(DestTy));
+    
     // Check for narrowing conversion
     if (!allowNarrowing && isNarrowingConversion(SrcTy, DestTy)) {
+        std::string msg = "Narrowing conversion not allowed";
+        if (!context.empty()) {
+            msg += " in " + context;
+        }
+        msg += "\n  From: " + getTypeName(SrcTy) + "\n  To: " + getTypeName(DestTy);
+        LogCompilerError(ErrorType::SEMANTIC_TYPE, msg);
         return nullptr;
     }
     
+    // Perform widening conversions
+    
     // int to float (widening)
     if (SrcTy->isIntegerTy(32) && DestTy->isFloatTy()) {
+        DEBUG_VERBOSE("  Converting int to float");
         return Builder.CreateSIToFP(V, DestTy, "itof");
     }
     
     // bool to int (widening)
     if (SrcTy->isIntegerTy(1) && DestTy->isIntegerTy(32)) {
+        DEBUG_VERBOSE("  Converting bool to int");
         return Builder.CreateZExt(V, DestTy, "btoi");
     }
     
     // bool to float (widening through int)
     if (SrcTy->isIntegerTy(1) && DestTy->isFloatTy()) {
+        DEBUG_VERBOSE("  Converting bool to float (via int)");
         Value* AsInt = Builder.CreateZExt(V, Type::getInt32Ty(TheContext), "btoi");
         return Builder.CreateSIToFP(AsInt, DestTy, "itof");
     }
     
-    // **FIX: Handle f64 → f32 conversion (from APFloat operations)**
+    // double to float conversion (handle APFloat operations)
     if (SrcTy->isDoubleTy() && DestTy->isFloatTy()) {
+        DEBUG_VERBOSE("  Converting double to float");
         return Builder.CreateFPTrunc(V, DestTy, "fptrunc");
     }
     
-    // **FIX: Handle f32 → f64 conversion (shouldn't happen but be safe)**
+    // float to double conversion
     if (SrcTy->isFloatTy() && DestTy->isDoubleTy()) {
+        DEBUG_VERBOSE("  Converting float to double");
         return Builder.CreateFPExt(V, DestTy, "fpext");
     }
     
-    // int/float to bool for conditionals
-    if (DestTy->isIntegerTy(1)) {
-        if (SrcTy->isIntegerTy(32)) {
+    // Narrowing conversions (only if allowed)
+    if (allowNarrowing) {
+        // float to int (narrowing)
+        if (SrcTy->isFloatTy() && DestTy->isIntegerTy(32)) {
+            DEBUG_VERBOSE("  Converting float to int (narrowing - allowed)");
+            return Builder.CreateFPToSI(V, DestTy, "ftoi");
+        }
+        
+        // int to bool (narrowing - used in conditionals)
+        if (SrcTy->isIntegerTy(32) && DestTy->isIntegerTy(1)) {
+            DEBUG_VERBOSE("  Converting int to bool (narrowing - allowed)");
             return Builder.CreateICmpNE(V, ConstantInt::get(SrcTy, 0), "tobool");
         }
-        if (SrcTy->isFloatTy() || SrcTy->isDoubleTy()) {
+        
+        // float/double to bool for conditionals
+        if ((SrcTy->isFloatTy() || SrcTy->isDoubleTy()) && DestTy->isIntegerTy(1)) {
+            DEBUG_VERBOSE("  Converting float/double to bool");
             return Builder.CreateFCmpONE(V, ConstantFP::get(SrcTy, 0.0), "tobool");
         }
     }
     
+    // Unsupported conversion
+    std::string msg = "Cannot convert between types";
+    if (!context.empty()) {
+        msg += " in " + context;
+    }
+    msg += "\n  From: " + getTypeName(SrcTy) + "\n  To: " + getTypeName(DestTy);
+    LogCompilerError(ErrorType::SEMANTIC_TYPE, msg);
     return nullptr;
 }
+
+/// checkTypeCompatibility - Check if two types are compatible for operations
+static bool checkTypeCompatibility(Type* T1, Type* T2, const std::string& operation) {
+    if (!T1 || !T2) return false;
+    
+    // Same types are always compatible
+    if (T1 == T2) return true;
+    
+    // Numeric types are compatible with each other (with conversion)
+    bool t1Numeric = T1->isIntegerTy(32) || T1->isFloatTy() || T1->isIntegerTy(1);
+    bool t2Numeric = T2->isIntegerTy(32) || T2->isFloatTy() || T2->isIntegerTy(1);
+    
+    if (t1Numeric && t2Numeric) return true;
+    
+    DEBUG_CODEGEN("  Type incompatibility in " + operation);
+    DEBUG_CODEGEN("    Type 1: " + getTypeName(T1));
+    DEBUG_CODEGEN("    Type 2: " + getTypeName(T2));
+    
+    return false;
+}
+
+
+// Duplicate checkNarrowingConversion removed; use the earlier definition above.
+
 
 /// promoteTypes - Promote two values to common type for binary operations
 static void promoteTypes(Value*& L, Value*& R) {
@@ -3152,30 +3398,10 @@ Value* AssignmentExprAST::codegen() {
 Value* CallExprAST::codegen() {
     DEBUG_CODEGEN("Generating function call: " + Callee);
     
-    Function* CalleeF = TheModule->getFunction(Callee);
-    
+    // Check if function exists
+    Function* CalleeF = checkFunctionExists(Callee);
     if (!CalleeF) {
-        DEBUG_CODEGEN("  ERROR: Function not found");
-        
-        if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
-            fprintf(stderr, "  Available functions:\n");
-            for (auto& F : TheModule->functions()) {
-                fprintf(stderr, "    - %s\n", F.getName().str().c_str());
-            }
-        }
-        
-        std::string msg = "Call to undefined function '" + Callee + "'";
-        std::string suggestion = "";
-        
-        for (auto& F : TheModule->functions()) {
-            std::string FName = F.getName().str();
-            if (FName.find(Callee.substr(0, std::min((size_t)3, Callee.length()))) != std::string::npos) {
-                suggestion = "Did you mean '" + FName + "'?";
-                break;
-            }
-        }
-        
-        LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg, -1, -1, suggestion);
+        // Error already logged
         return nullptr;
     }
     
@@ -3183,12 +3409,13 @@ Value* CallExprAST::codegen() {
     DEBUG_VERBOSE("  Expected args: " + std::to_string(CalleeF->arg_size()));
     DEBUG_VERBOSE("  Provided args: " + std::to_string(Args.size()));
     
+    // Check argument count
     if (CalleeF->arg_size() != Args.size()) {
         DEBUG_CODEGEN("  ERROR: Argument count mismatch");
-        std::string msg = "Incorrect number of arguments in call to '" + Callee + "'";
-        msg += "\n  Expected: " + std::to_string(CalleeF->arg_size());
-        msg += "\n  Provided: " + std::to_string(Args.size());
-        LogCompilerError(ErrorType::SEMANTIC_OTHER, msg);
+        std::string msg = "Function '" + Callee + "' expects " + 
+                         std::to_string(CalleeF->arg_size()) + " argument(s), but " +
+                         std::to_string(Args.size()) + " provided";
+        LogCompilerError(ErrorType::SEMANTIC_TYPE, msg);
         return nullptr;
     }
     
@@ -3208,19 +3435,25 @@ Value* CallExprAST::codegen() {
         DEBUG_VERBOSE("    Expected: " + getTypeName(ExpectedType));
         DEBUG_VERBOSE("    Actual: " + getTypeName(ActualType));
         
+        // Check type compatibility and convert if needed
         if (ActualType != ExpectedType) {
-            ArgVal = castToType(ArgVal, ExpectedType, true);
-            if (!ArgVal) {
-                DEBUG_CODEGEN("  ERROR: Type conversion failed for argument " + 
-                             std::to_string(Idx));
-                std::string msg = "Type mismatch in argument " + std::to_string(Idx + 1) + 
-                                 " of function call '" + Callee + "'";
-                LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
-                               "Expected: " + getTypeName(ExpectedType) + 
-                               ", Got: " + getTypeName(ActualType));
+            // Per spec: allow widening, disallow narrowing
+            if (isNarrowingConversion(ActualType, ExpectedType)) {
+                std::string msg = "Narrowing conversion in argument " + std::to_string(Idx + 1) + 
+                                " of function '" + Callee + "'";
+                msg += "\n  Expected: " + getTypeName(ExpectedType);
+                msg += "\n  Provided: " + getTypeName(ActualType);
+                LogCompilerError(ErrorType::SEMANTIC_TYPE, msg);
                 return nullptr;
             }
-            DEBUG_VERBOSE("    Converted to: " + getTypeName(ExpectedType));
+            
+            ArgVal = castToType(ArgVal, ExpectedType, false, 
+                               "function call argument " + std::to_string(Idx + 1));
+            if (!ArgVal) {
+                // Error already logged
+                return nullptr;
+            }
+            DEBUG_VERBOSE("    Converted successfully");
         }
         
         ArgsV.push_back(ArgVal);
@@ -3388,17 +3621,29 @@ Value* BlockAST::codegen() {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     
     // Generate code for local declarations
+    // Generate code for local declarations
     for (auto& decl : LocalDecls) {
         const std::string& VarName = decl->getName();
         const std::string& TypeStr = decl->getType();
         
+        DEBUG_CODEGEN("  Declaring local variable: " + VarName + " : " + TypeStr);
+        
+        // Check if shadowing a global variable (allowed)
+        if (GlobalValues.find(VarName) != GlobalValues.end()) {
+            DEBUG_CODEGEN("    Shadowing global variable '" + VarName + "'");
+        }
+        
+        // Save old binding if variable already exists in current scope
         if (NamedValues[VarName]) {
             OldBindings[VarName] = NamedValues[VarName];
+            DEBUG_CODEGEN("    Shadowing local variable from outer scope");
         }
         
         Type* VarType = getTypeFromString(TypeStr);
         if (!VarType) {
-            return LogErrorV("Invalid type in local declaration");
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, 
+                            "Invalid type '" + TypeStr + "' for variable '" + VarName + "'");
+            return nullptr;
         }
         
         AllocaInst* Alloca = CreateEntryBlockAlloca(TheFunction, VarName, VarType);
@@ -3413,7 +3658,7 @@ Value* BlockAST::codegen() {
         }
         
         NamedValues[VarName] = Alloca;
-        VariableTypes[VarName] = TypeStr;
+        registerVariable(VarName, TypeStr, false);  // Register in symbol table
     }
     
     // Generate code for statements
@@ -3486,7 +3731,9 @@ Value* FunctionDeclAST::codegen() {
         AllocaInst* Alloca = CreateEntryBlockAlloca(TheFunction, ArgName, Arg.getType());
         Builder.CreateStore(&Arg, Alloca);
         NamedValues[ArgName] = Alloca;
-        VariableTypes[ArgName] = Proto->getParams()[Idx++]->getType();
+        std::string TypeStr = Proto->getParams()[Idx++]->getType();
+        VariableTypes[ArgName] = TypeStr;
+        registerVariable(ArgName, TypeStr, false);  // Register parameter in symbol table
     }
     
     // Generate function body
@@ -3509,6 +3756,10 @@ Value* FunctionDeclAST::codegen() {
         
         // Verify function
         verifyFunction(*TheFunction);
+
+        for (auto& param : Proto->getParams()) {
+            SymbolTypeTable.erase(param->getName());
+        }
         
         CurrentFunction = OldFunction;
         return TheFunction;
@@ -3561,10 +3812,18 @@ Function* FunctionPrototypeAST::codegen() {
 
 /// GlobVarDeclAST::codegen - Generate code for global variable declarations
 Value* GlobVarDeclAST::codegen() {
-    // Use llvm::Type to avoid conflict with class member 'Type'
+    DEBUG_CODEGEN("Generating global variable: " + getName());
+    
+    // Check if variable already exists
+    if (GlobalValues.find(getName()) != GlobalValues.end()) {
+        std::string msg = "Redeclaration of global variable '" + getName() + "'";
+        LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg);
+        return nullptr;
+    }
+    
     llvm::Type* VarType = getTypeFromString(getType());
     if (!VarType) {
-        return LogErrorV("Invalid type for global variable");
+        return LogErrorV("Invalid type for global variable '" + getName() + "'");
     }
     
     // Create global variable with zero initializer
@@ -3577,7 +3836,7 @@ Value* GlobVarDeclAST::codegen() {
     } else if (VarType->isIntegerTy(1)) {
         InitVal = ConstantInt::get(VarType, 0);
     } else {
-        return LogErrorV("Unsupported type for global variable");
+        return LogErrorV("Unsupported type for global variable '" + getName() + "'");
     }
     
     GlobalVariable* GV = new GlobalVariable(
@@ -3590,8 +3849,9 @@ Value* GlobVarDeclAST::codegen() {
     );
     
     GlobalValues[getName()] = GV;
-    VariableTypes[getName()] = getType();
+    registerVariable(getName(), getType(), true);  // Register in symbol table
     
+    DEBUG_CODEGEN("  Global variable created successfully");
     return GV;
 }
 
