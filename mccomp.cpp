@@ -36,6 +36,28 @@
 using namespace llvm;
 using namespace llvm::sys;
 
+static LLVMContext TheContext;
+static IRBuilder<> Builder(TheContext);
+static std::unique_ptr<Module> TheModule;
+static std::map<std::string, AllocaInst*> NamedValues;
+static std::map<std::string, GlobalVariable*> GlobalValues;
+static std::map<std::string, std::string> VariableTypes;
+static Function *CurrentFunction = nullptr;
+
+// TOKEN class is used to keep track of information about a token
+class TOKEN {
+public:
+  TOKEN() = default;
+  int type = -100;
+  std::string lexeme;
+  int lineNo;
+  int columnNo;
+  const std::string getIdentifierStr() const;
+  const int getIntVal() const;
+  const float getFloatVal() const;
+  const bool getBoolVal() const;
+};
+
 // ANSI color codes for better readability
 #define USE_COLORS 1
 
@@ -58,6 +80,321 @@ using namespace llvm::sys;
   #define COLOR_CYAN    std::string("")
   #define COLOR_BOLD    std::string("")
 #endif
+
+//===----------------------------------------------------------------------===//
+// Debug Infrastructure
+//===----------------------------------------------------------------------===//
+
+enum class DebugLevel {
+    NONE = 0,
+    USER = 1,
+    PARSER = 2,
+    CODEGEN = 3,
+    VERBOSE = 4
+};
+
+static DebugLevel CurrentDebugLevel = DebugLevel::NONE;
+
+static void initDebugLevel(int argc, char** argv) {
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "-d" || arg == "--debug") {
+            if (i + 1 < argc) {
+                std::string level = argv[i + 1];
+                if (level == "user") CurrentDebugLevel = DebugLevel::USER;
+                else if (level == "parser") CurrentDebugLevel = DebugLevel::PARSER;
+                else if (level == "codegen") CurrentDebugLevel = DebugLevel::CODEGEN;
+                else if (level == "verbose") CurrentDebugLevel = DebugLevel::VERBOSE;
+                i++;
+            }
+        }
+    }
+    
+    const char* envDebug = getenv("MCCOMP_DEBUG");
+    if (envDebug) {
+        std::string level = envDebug;
+        if (level == "user") CurrentDebugLevel = DebugLevel::USER;
+        else if (level == "parser") CurrentDebugLevel = DebugLevel::PARSER;
+        else if (level == "codegen") CurrentDebugLevel = DebugLevel::CODEGEN;
+        else if (level == "verbose") CurrentDebugLevel = DebugLevel::VERBOSE;
+    }
+}
+
+static void DEBUG_USER(const std::string& msg) {
+    if (CurrentDebugLevel >= DebugLevel::USER) {
+        fprintf(stderr, "%s[USER]%s %s\n", COLOR_CYAN.c_str(), COLOR_RESET.c_str(), msg.c_str());
+    }
+}
+
+static void DEBUG_PARSER(const std::string& msg, int line = -1, int col = -1) {
+    if (CurrentDebugLevel >= DebugLevel::PARSER) {
+        if (line >= 0) {
+            fprintf(stderr, "%s[PARSER:%d:%d]%s %s\n", 
+                    COLOR_GREEN.c_str(), line, col, COLOR_RESET.c_str(), msg.c_str());
+        } else {
+            fprintf(stderr, "%s[PARSER]%s %s\n", 
+                    COLOR_GREEN.c_str(), COLOR_RESET.c_str(), msg.c_str());
+        }
+    }
+}
+
+static void DEBUG_CODEGEN(const std::string& msg) {
+    if (CurrentDebugLevel >= DebugLevel::CODEGEN) {
+        fprintf(stderr, "%s[CODEGEN]%s %s\n", 
+                COLOR_YELLOW.c_str(), COLOR_RESET.c_str(), msg.c_str());
+    }
+}
+
+static void DEBUG_VERBOSE(const std::string& msg) {
+    if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
+        fprintf(stderr, "%s[VERBOSE]%s %s\n", 
+                COLOR_MAGENTA.c_str(), COLOR_RESET.c_str(), msg.c_str());
+    }
+}
+
+static std::vector<std::string> ParserStack;
+
+static void PARSER_ENTER(const std::string& function, const TOKEN& tok) {
+    ParserStack.push_back(function);
+    if (CurrentDebugLevel >= DebugLevel::PARSER) {
+        std::string indent(ParserStack.size() * 2, ' ');
+        fprintf(stderr, "%s[PARSER]%s %s→ Entering %s at line %d, col %d (token: '%s')\n",
+                COLOR_GREEN.c_str(), COLOR_RESET.c_str(), indent.c_str(),
+                function.c_str(), tok.lineNo, tok.columnNo, tok.lexeme.c_str());
+    }
+}
+
+static void PARSER_EXIT(const std::string& function, bool success) {
+    if (CurrentDebugLevel >= DebugLevel::PARSER) {
+        std::string indent(ParserStack.size() * 2, ' ');
+        const char* status = success ? "✓" : "✗";
+        std::string color = success ? COLOR_GREEN : COLOR_RED;
+        fprintf(stderr, "%s[PARSER]%s %s← Exiting %s %s%s%s\n",
+                COLOR_GREEN.c_str(), COLOR_RESET.c_str(), indent.c_str(),
+                function.c_str(), color.c_str(), status, COLOR_RESET.c_str());
+    }
+    if (!ParserStack.empty()) {
+        ParserStack.pop_back();
+    }
+}
+
+struct ParserContext {
+    std::string currentFunction;
+    int blockDepth;
+    bool inLoop;
+    bool inConditional;
+    
+    ParserContext() : currentFunction(""), blockDepth(0), inLoop(false), inConditional(false) {}
+    
+    std::string toString() const {
+        std::string result = "Function: " + (currentFunction.empty() ? "(global)" : currentFunction);
+        result += ", Block depth: " + std::to_string(blockDepth);
+        if (inLoop) result += ", in loop";
+        if (inConditional) result += ", in conditional";
+        return result;
+    }
+};
+
+static ParserContext CurrentContext;
+
+static void ShowCompilationProgress() {
+    if (CurrentDebugLevel >= DebugLevel::USER) {
+        fprintf(stderr, "\n%s%s┌────────────────────────────────┐%s\n",
+                COLOR_BOLD.c_str(), COLOR_CYAN.c_str(), COLOR_RESET.c_str());
+        fprintf(stderr, "%s%s│  MiniC Compiler - Debug Mode  │%s\n",
+                COLOR_BOLD.c_str(), COLOR_CYAN.c_str(), COLOR_RESET.c_str());
+        fprintf(stderr, "%s%s└────────────────────────────────┘%s\n\n",
+                COLOR_BOLD.c_str(), COLOR_CYAN.c_str(), COLOR_RESET.c_str());
+    }
+}
+
+static void ShowPhaseComplete(const std::string& phase) {
+    if (CurrentDebugLevel >= DebugLevel::USER) {
+        fprintf(stderr, "%s✓%s %s complete\n", 
+                COLOR_GREEN.c_str(), COLOR_RESET.c_str(), phase.c_str());
+    }
+}
+
+//===----------------------------------------------------------------------===//
+// Error Reporting Infrastructure
+//===----------------------------------------------------------------------===//
+
+enum class ErrorType {
+    LEXICAL,
+    SYNTAX,
+    SEMANTIC_TYPE,
+    SEMANTIC_SCOPE,
+    SEMANTIC_OTHER
+};
+
+class CompilerError {
+public:
+    ErrorType type;
+    std::string message;
+    int lineNo;
+    int columnNo;
+    std::string context;
+    
+    CompilerError(ErrorType t, const std::string& msg, int line = -1, int col = -1, const std::string& ctx = "")
+        : type(t), message(msg), lineNo(line), columnNo(col), context(ctx) {}
+    
+    void print() const {
+        std::string typeStr;
+        std::string color;
+        
+        switch(type) {
+            case ErrorType::LEXICAL:
+                typeStr = "Lexical Error";
+                color = COLOR_RED;
+                break;
+            case ErrorType::SYNTAX:
+                typeStr = "Syntax Error";
+                color = COLOR_RED;
+                break;
+            case ErrorType::SEMANTIC_TYPE:
+                typeStr = "Type Error";
+                color = COLOR_YELLOW;
+                break;
+            case ErrorType::SEMANTIC_SCOPE:
+                typeStr = "Scope Error";
+                color = COLOR_YELLOW;
+                break;
+            case ErrorType::SEMANTIC_OTHER:
+                typeStr = "Semantic Error";
+                color = COLOR_YELLOW;
+                break;
+        }
+        
+        fprintf(stderr, "%s%s%s", COLOR_BOLD.c_str(), color.c_str(), typeStr.c_str());
+        
+        if (lineNo >= 0) {
+            fprintf(stderr, " at line %d", lineNo);
+            if (columnNo >= 0) {
+                fprintf(stderr, ", column %d", columnNo);
+            }
+        }
+        
+        fprintf(stderr, ":%s\n", COLOR_RESET.c_str());
+        fprintf(stderr, "  %s\n", message.c_str());
+        
+        if (!context.empty()) {
+            fprintf(stderr, "  %sContext:%s %s\n", 
+                    COLOR_CYAN.c_str(), COLOR_RESET.c_str(), context.c_str());
+        }
+        fprintf(stderr, "\n");
+    }
+};
+
+static std::vector<CompilerError> ErrorLog;
+static bool HasErrors = false;
+
+static void LogCompilerError(ErrorType type, const std::string& msg, 
+                             int line = -1, int col = -1, const std::string& context = "") {
+    HasErrors = true;
+    ErrorLog.emplace_back(type, msg, line, col, context);
+}
+
+static void PrintAllErrors() {
+    if (ErrorLog.empty()) return;
+    
+    fprintf(stderr, "\n%s%s╔════════════════════════════════════════════════╗%s\n",
+            COLOR_BOLD.c_str(), COLOR_RED.c_str(), COLOR_RESET.c_str());
+    fprintf(stderr, "%s%s║  Compilation Failed - %zu Error(s) Found", 
+            COLOR_BOLD.c_str(), COLOR_RED.c_str(), ErrorLog.size());
+    
+    int padding = 16 - std::to_string(ErrorLog.size()).length();
+    for (int i = 0; i < padding; i++) fprintf(stderr, " ");
+    fprintf(stderr, "║%s\n", COLOR_RESET.c_str());
+    
+    fprintf(stderr, "%s%s╚════════════════════════════════════════════════╝%s\n\n",
+            COLOR_BOLD.c_str(), COLOR_RED.c_str(), COLOR_RESET.c_str());
+    
+    for (const auto& error : ErrorLog) {
+        error.print();
+    }
+}
+
+//===----------------------------------------------------------------------===//
+// Type Helper Functions
+//===----------------------------------------------------------------------===//
+
+static std::string getTypeName(Type* T) {
+    if (!T) return "unknown";
+    
+    if (T->isVoidTy()) return "void";
+    if (T->isIntegerTy(1)) return "bool";
+    if (T->isIntegerTy(32)) return "int";
+    if (T->isFloatTy()) return "float";
+    if (T->isDoubleTy()) return "double";
+    
+    if (T->isPointerTy()) {
+        return "pointer";
+    }
+    
+    if (T->isFunctionTy()) {
+        FunctionType* FT = cast<FunctionType>(T);
+        std::string result = getTypeName(FT->getReturnType()) + "(";
+        for (unsigned i = 0; i < FT->getNumParams(); i++) {
+            if (i > 0) result += ", ";
+            result += getTypeName(FT->getParamType(i));
+        }
+        result += ")";
+        return result;
+    }
+    
+    std::string typeStr;
+    llvm::raw_string_ostream rso(typeStr);
+    T->print(rso);
+    rso.flush();
+    return typeStr;
+}
+
+static void DUMP_SYMBOL_TABLE() {
+    if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
+        fprintf(stderr, "\n%s[SYMBOL TABLE DUMP]%s\n", 
+                COLOR_CYAN.c_str(), COLOR_RESET.c_str());
+        
+        fprintf(stderr, "  Local Variables:\n");
+        if (NamedValues.empty()) {
+            fprintf(stderr, "    (empty)\n");
+        } else {
+            for (const auto& pair : NamedValues) {
+                std::string typeName = getTypeName(pair.second->getAllocatedType());
+                fprintf(stderr, "    %s: %s\n", 
+                        pair.first.c_str(), 
+                        typeName.c_str());
+            }
+        }
+        
+        fprintf(stderr, "  Global Variables:\n");
+        if (GlobalValues.empty()) {
+            fprintf(stderr, "    (empty)\n");
+        } else {
+            for (const auto& pair : GlobalValues) {
+                std::string typeName = getTypeName(pair.second->getValueType());
+                fprintf(stderr, "    %s: %s\n", 
+                        pair.first.c_str(), 
+                        typeName.c_str());
+            }
+        }
+        
+        fprintf(stderr, "  Functions:\n");
+        bool hasFunctions = false;
+        for (auto& F : TheModule->functions()) {
+            if (!F.empty() || F.isDeclaration()) {
+                std::string typeName = getTypeName(F.getFunctionType());
+                fprintf(stderr, "    %s: %s\n", 
+                        F.getName().str().c_str(),
+                        typeName.c_str());
+                hasFunctions = true;
+            }
+        }
+        if (!hasFunctions) {
+            fprintf(stderr, "    (empty)\n");
+        }
+        fprintf(stderr, "\n");
+    }
+}
 
 //===----------------------------------------------------------------------===//
 // AST Display Infrastructure
@@ -158,19 +495,7 @@ enum TOKEN_TYPE {
   INVALID = -100 // signal invalid token
 };
 
-// TOKEN class is used to keep track of information about a token
-class TOKEN {
-public:
-  TOKEN() = default;
-  int type = -100;
-  std::string lexeme;
-  int lineNo;
-  int columnNo;
-  const std::string getIdentifierStr() const;
-  const int getIntVal() const;
-  const float getFloatVal() const;
-  const bool getBoolVal() const;
-};
+
 
 static std::string globalLexeme;
 static int lineNo, columnNo;
@@ -957,24 +1282,57 @@ public:
 
 };
 
-/// LogError* - These are little helper function for error handling.
-std::unique_ptr<ASTnode> LogError(TOKEN tok, const char *Str) {
-  fprintf(stderr, "%d:%d Error: %s\n", tok.lineNo, tok.columnNo, Str);
-  exit(2);
-  return nullptr;
+//===----------------------------------------------------------------------===//
+// Enhanced Error Logging Functions
+//===----------------------------------------------------------------------===//
+
+static std::unique_ptr<ASTnode> LogError(TOKEN tok, const char *Str) {
+    LogCompilerError(ErrorType::SYNTAX, Str, tok.lineNo, tok.columnNo, 
+                     "Token: '" + tok.lexeme + "'");
+    return nullptr;
 }
 
-std::unique_ptr<FunctionPrototypeAST> LogErrorP(TOKEN tok, const char *Str) {
-  LogError(tok, Str);
-  exit(2);
-  return nullptr;
+static std::unique_ptr<ASTnode> LogError(const char *Str) {
+    LogCompilerError(ErrorType::SYNTAX, Str, lineNo, columnNo);
+    return nullptr;
 }
 
-std::unique_ptr<ASTnode> LogError(const char *Str) {
-  fprintf(stderr, "Error: %s\n", Str);
-  exit(2);
-  return nullptr;
+static std::unique_ptr<FunctionPrototypeAST> LogErrorP(TOKEN tok, const char *Str) {
+    LogCompilerError(ErrorType::SYNTAX, Str, tok.lineNo, tok.columnNo,
+                     "Token: '" + tok.lexeme + "'");
+    return nullptr;
 }
+
+static Value* LogErrorV(const char *Str) {
+    LogCompilerError(ErrorType::SEMANTIC_OTHER, Str);
+    return nullptr;
+}
+
+static Value* LogErrorV(const std::string& Str) {
+    LogCompilerError(ErrorType::SEMANTIC_OTHER, Str);
+    return nullptr;
+}
+
+static Value* LogTypeError(const std::string& msg, Type* expected, Type* actual) {
+    std::string fullMsg = msg + "\n  Expected: " + 
+                         getTypeName(expected) + 
+                         "\n  Actual: " + 
+                         getTypeName(actual);
+    LogCompilerError(ErrorType::SEMANTIC_TYPE, fullMsg);
+    return nullptr;
+}
+
+static Value* LogScopeError(const std::string& varName, const std::string& context = "") {
+    std::string msg = "Undefined variable '" + varName + "'";
+    LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg, -1, -1, context);
+    return nullptr;
+}
+
+static Function* LogErrorF(const char *Str) {
+    LogCompilerError(ErrorType::SEMANTIC_OTHER, Str);
+    return nullptr;
+}
+
 
 //===----------------------------------------------------------------------===//
 // AST Printing Helper
@@ -1676,27 +2034,36 @@ static std::unique_ptr<ASTnode> ParseOrExpr() {
 /// Implementation uses explicit lookahead rather than backtracking
 /// for proper predictive parsing.
 static std::unique_ptr<ASTnode> ParseExper() {
-  // LL(2) disambiguation: Check if this is an assignment
-  if (CurTok.type == IDENT) {
-    TOKEN nextTok = peekNextToken();
+    PARSER_ENTER("ParseExper", CurTok);
     
-    if (nextTok.type == ASSIGN) {
-      // Production: expr ::= IDENT "=" expr
-      std::string varName = CurTok.getIdentifierStr();
-      getNextToken(); // consume IDENT
-      getNextToken(); // consume '='
-      
-      auto RHS = ParseExper();
-      if (!RHS)
-        return nullptr;
-      
-      return std::make_unique<AssignmentExprAST>(varName, std::move(RHS));
+    if (CurTok.type == IDENT) {
+        TOKEN nextTok = peekNextToken();
+        
+        DEBUG_PARSER("Checking for assignment: IDENT='" + CurTok.lexeme + 
+                    "', next token='" + nextTok.lexeme + "'");
+        
+        if (nextTok.type == ASSIGN) {
+            std::string varName = CurTok.getIdentifierStr();
+            DEBUG_PARSER("Found assignment to variable '" + varName + "'");
+            
+            getNextToken();
+            getNextToken();
+            
+            auto RHS = ParseExper();
+            if (!RHS) {
+                PARSER_EXIT("ParseExper", false);
+                return nullptr;
+            }
+            
+            auto result = std::make_unique<AssignmentExprAST>(varName, std::move(RHS));
+            PARSER_EXIT("ParseExper", true);
+            return result;
+        }
     }
-    // else: Fall through to parse as or_expr
-  }
-  
-  // Production: expr ::= or_expr
-  return ParseOrExpr();
+    
+    auto result = ParseOrExpr();
+    PARSER_EXIT("ParseExper", result != nullptr);
+    return result;
 }
 
 
@@ -2291,24 +2658,10 @@ static void parser() {
 // Code Generation
 //===----------------------------------------------------------------------===//
 
-static LLVMContext TheContext;
-static IRBuilder<> Builder(TheContext);
-static std::unique_ptr<Module> TheModule;
+
 //===----------------------------------------------------------------------===//
 // Symbol Tables and Helper Functions
 //===----------------------------------------------------------------------===//
-
-/// NamedValues - Map keeps track of local variables in current scope
-static std::map<std::string, AllocaInst*> NamedValues;
-
-/// GlobalValues - Tracks global variables
-static std::map<std::string, GlobalVariable*> GlobalValues;
-
-/// VariableTypes - Tracks type of each variable for type checking
-static std::map<std::string, std::string> VariableTypes;
-
-/// CurrentFunction - Pointer to function currently being compiled
-static Function *CurrentFunction = nullptr;
 
 /// getTypeFromString - Convert MiniC type string to LLVM Type*
 static Type* getTypeFromString(const std::string& typeStr) {
@@ -2335,17 +2688,6 @@ static AllocaInst* CreateEntryBlockAlloca(Function *TheFunction,
     return TmpB.CreateAlloca(VarType, nullptr, VarName);
 }
 
-/// LogErrorV - Helper for codegen errors
-static Value* LogErrorV(const char *Str) {
-    fprintf(stderr, "Codegen Error: %s\n", Str);
-    return nullptr;
-}
-
-/// LogErrorF - Helper for function codegen errors
-static Function* LogErrorF(const char *Str) {
-    fprintf(stderr, "Codegen Error: %s\n", Str);
-    return nullptr;
-}
 
 //===----------------------------------------------------------------------===//
 // Code Generation - AST Node Implementations
@@ -2353,34 +2695,42 @@ static Function* LogErrorF(const char *Str) {
 
 /// IntASTnode::codegen - Generate LLVM IR for integer literals
 Value* IntASTnode::codegen() {
+    DEBUG_CODEGEN("Generating integer literal: " + std::to_string(Val));
     return ConstantInt::get(Type::getInt32Ty(TheContext), APInt(32, Val, true));
 }
 
 /// FloatASTnode::codegen - Generate LLVM IR for float literals
 Value* FloatASTnode::codegen() {
-    // **FIX: Explicitly use Type::getFloatTy to create f32 constants**
+    DEBUG_CODEGEN("Generating float literal: " + std::to_string(Val));
     return ConstantFP::get(Type::getFloatTy(TheContext), APFloat((float)Val));
 }
 
 /// BoolASTnode::codegen - Generate LLVM IR for boolean literals
 Value* BoolASTnode::codegen() {
+    DEBUG_CODEGEN("Generating boolean literal: " + std::string(Bool ? "true" : "false"));
     return ConstantInt::get(Type::getInt1Ty(TheContext), APInt(1, Bool ? 1 : 0, false));
 }
 
 /// VariableASTnode::codegen - Generate LLVM IR for variable references
 Value* VariableASTnode::codegen() {
+    DEBUG_CODEGEN("Loading variable: " + Name);
+    
     AllocaInst* V = NamedValues[Name];
     if (V) {
+        DEBUG_CODEGEN("  Found in local scope: " + getTypeName(V->getAllocatedType()));
         return Builder.CreateLoad(V->getAllocatedType(), V, Name.c_str());
     }
     
     GlobalVariable* GV = GlobalValues[Name];
     if (GV) {
+        DEBUG_CODEGEN("  Found in global scope: " + getTypeName(GV->getValueType()));
         return Builder.CreateLoad(GV->getValueType(), GV, Name.c_str());
     }
     
-    return LogErrorV(("Unknown variable name: " + Name).c_str());
-
+    DEBUG_CODEGEN("  ERROR: Variable not found!");
+    DUMP_SYMBOL_TABLE();
+    
+    return LogScopeError(Name, CurrentContext.toString());
 }
 
 //===----------------------------------------------------------------------===//
@@ -2499,204 +2849,341 @@ static void promoteTypes(Value*& L, Value*& R) {
 
 /// BinaryExprAST::codegen - Generate code for binary operators
 Value* BinaryExprAST::codegen() {
+    DEBUG_CODEGEN("Generating binary expression: " + Op);
+    
     Value* L = LHS->codegen();
     Value* R = RHS->codegen();
     
-    if (!L || !R)
+    if (!L || !R) {
+        DEBUG_CODEGEN("  ERROR: Failed to generate operands");
         return nullptr;
+    }
     
-    // Promote types to common type
+    DEBUG_VERBOSE("  LHS type: " + getTypeName(L->getType()));
+    DEBUG_VERBOSE("  RHS type: " + getTypeName(R->getType()));
+    
+    Type* OrigLTy = L->getType();
+    Type* OrigRTy = R->getType();
+    
     promoteTypes(L, R);
+    
+    DEBUG_VERBOSE("  After promotion: " + getTypeName(L->getType()));
     
     Type* OpType = L->getType();
     
-    // Arithmetic operators
     if (Op == "+") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy() for f32/f64
+        DEBUG_CODEGEN("  Creating addition");
+        if (OpType->isFloatingPointTy())
             return Builder.CreateFAdd(L, R, "fadd");
-        else
+        else if (OpType->isIntegerTy())
             return Builder.CreateAdd(L, R, "add");
+        else {
+            std::string msg = "Invalid operand types for operator '+'";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
+            return nullptr;
+        }
     }
     
     if (Op == "-") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
+        DEBUG_CODEGEN("  Creating subtraction");
+        if (OpType->isFloatingPointTy())
             return Builder.CreateFSub(L, R, "fsub");
-        else
+        else if (OpType->isIntegerTy())
             return Builder.CreateSub(L, R, "sub");
+        else {
+            std::string msg = "Invalid operand types for operator '-'";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
+            return nullptr;
+        }
     }
     
     if (Op == "*") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
+        DEBUG_CODEGEN("  Creating multiplication");
+        if (OpType->isFloatingPointTy())
             return Builder.CreateFMul(L, R, "fmul");
-        else
+        else if (OpType->isIntegerTy())
             return Builder.CreateMul(L, R, "mul");
+        else {
+            std::string msg = "Invalid operand types for operator '*'";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
+            return nullptr;
+        }
     }
     
     if (Op == "/") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
-            return Builder.CreateFDiv(L, R, "fdiv"); // Correctly chooses FDiv
-        else
+        DEBUG_CODEGEN("  Creating division");
+        if (OpType->isFloatingPointTy())
+            return Builder.CreateFDiv(L, R, "fdiv");
+        else if (OpType->isIntegerTy())
             return Builder.CreateSDiv(L, R, "sdiv");
+        else {
+            std::string msg = "Invalid operand types for operator '/'";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
+            return nullptr;
+        }
     }
     
     if (Op == "%") {
+        DEBUG_CODEGEN("  Creating modulo");
         if (OpType->isIntegerTy())
             return Builder.CreateSRem(L, R, "mod");
-        else
-            return LogErrorV("Modulo operator requires integer operands");
+        else {
+            std::string msg = "Modulo operator '%' requires integer operands";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "Got: " + getTypeName(OpType));
+            return nullptr;
+        }
     }
     
-    // Comparison operators
     if (Op == "<") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
-            return Builder.CreateFCmpOLT(L, R, "flt");  
-        else
+        DEBUG_CODEGEN("  Creating less than comparison");
+        if (OpType->isFloatingPointTy())
+            return Builder.CreateFCmpOLT(L, R, "flt");
+        else if (OpType->isIntegerTy())
             return Builder.CreateICmpSLT(L, R, "lt");
     }
 
     if (Op == "<=") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
-            return Builder.CreateFCmpOLE(L, R, "fle");  
-        else
+        DEBUG_CODEGEN("  Creating less than or equal comparison");
+        if (OpType->isFloatingPointTy())
+            return Builder.CreateFCmpOLE(L, R, "fle");
+        else if (OpType->isIntegerTy())
             return Builder.CreateICmpSLE(L, R, "le");
     }
 
     if (Op == ">") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
-            return Builder.CreateFCmpOGT(L, R, "fgt");  
-        else
+        DEBUG_CODEGEN("  Creating greater than comparison");
+        if (OpType->isFloatingPointTy())
+            return Builder.CreateFCmpOGT(L, R, "fgt");
+        else if (OpType->isIntegerTy())
             return Builder.CreateICmpSGT(L, R, "gt");
     }
 
     if (Op == ">=") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
-            return Builder.CreateFCmpOGE(L, R, "fge");  
-        else
+        DEBUG_CODEGEN("  Creating greater than or equal comparison");
+        if (OpType->isFloatingPointTy())
+            return Builder.CreateFCmpOGE(L, R, "fge");
+        else if (OpType->isIntegerTy())
             return Builder.CreateICmpSGE(L, R, "ge");
     }
 
     if (Op == "==") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
-            return Builder.CreateFCmpOEQ(L, R, "feq");  
-        else
+        DEBUG_CODEGEN("  Creating equality comparison");
+        if (OpType->isFloatingPointTy())
+            return Builder.CreateFCmpOEQ(L, R, "feq");
+        else if (OpType->isIntegerTy())
             return Builder.CreateICmpEQ(L, R, "eq");
     }
 
     if (Op == "!=") {
-        if (OpType->isFloatingPointTy()) // CHANGED: Use isFloatingPointTy()
-            return Builder.CreateFCmpONE(L, R, "fne");  
-        else
+        DEBUG_CODEGEN("  Creating inequality comparison");
+        if (OpType->isFloatingPointTy())
+            return Builder.CreateFCmpONE(L, R, "fne");
+        else if (OpType->isIntegerTy())
             return Builder.CreateICmpNE(L, R, "ne");
     }
     
-    // Logical operators
     if (Op == "&&") {
-        // Convert to bool if needed
+        DEBUG_CODEGEN("  Creating logical AND");
         L = castToType(L, Type::getInt1Ty(TheContext));
         R = castToType(R, Type::getInt1Ty(TheContext));
         return Builder.CreateAnd(L, R, "and");
     }
     
     if (Op == "||") {
+        DEBUG_CODEGEN("  Creating logical OR");
         L = castToType(L, Type::getInt1Ty(TheContext));
         R = castToType(R, Type::getInt1Ty(TheContext));
         return Builder.CreateOr(L, R, "or");
     }
     
-    return LogErrorV(("Unknown binary operator: " + Op).c_str());
+    LogCompilerError(ErrorType::SEMANTIC_OTHER, 
+                    "Unknown binary operator: '" + Op + "'");
+    return nullptr;
 }
 
 /// UnaryExprAST::codegen - Generate code for unary operators
 Value* UnaryExprAST::codegen() {
+    DEBUG_CODEGEN("Generating unary expression: " + Op);
+    
     Value* OperandV = Operand->codegen();
-    if (!OperandV)
+    if (!OperandV) {
+        DEBUG_CODEGEN("  ERROR: Failed to generate operand");
         return nullptr;
+    }
+    
+    DEBUG_VERBOSE("  Operand type: " + getTypeName(OperandV->getType()));
     
     if (Op == "-") {
         Type* OpType = OperandV->getType();
-        if (OpType->isFloatingPointTy()) { // CHANGED: Use isFloatingPointTy()
+        if (OpType->isFloatingPointTy()) {
+            DEBUG_CODEGEN("  Creating floating-point negation");
             return Builder.CreateFNeg(OperandV, "fneg");
         } else if (OpType->isIntegerTy()) {
-            // For int: 0 - value
+            DEBUG_CODEGEN("  Creating integer negation");
             return Builder.CreateNeg(OperandV, "neg");
         }
     }
     
     if (Op == "!") {
-        // Convert to bool first if needed
+        DEBUG_CODEGEN("  Creating logical NOT");
         OperandV = castToType(OperandV, Type::getInt1Ty(TheContext));
         return Builder.CreateNot(OperandV, "not");
     }
     
-    return LogErrorV(("Unknown unary operator: " + Op).c_str());
+    LogCompilerError(ErrorType::SEMANTIC_OTHER, 
+                    "Unknown unary operator: '" + Op + "'");
+    return nullptr;
 }
 
 /// AssignmentExprAST::codegen - Generate code for assignments
 Value* AssignmentExprAST::codegen() {
-    Value* Val = RHS->codegen();
-    if (!Val)
-        return nullptr;
+    DEBUG_CODEGEN("Generating assignment to: " + VarName);
     
-    // Look up the variable
+    Value* Val = RHS->codegen();
+    if (!Val) {
+        DEBUG_CODEGEN("  ERROR: Failed to generate RHS");
+        return nullptr;
+    }
+    
+    DEBUG_VERBOSE("  RHS type: " + getTypeName(Val->getType()));
+    
     AllocaInst* Variable = NamedValues[VarName];
+    
     if (!Variable) {
-        // Check if it's a global
         GlobalVariable* GV = GlobalValues[VarName];
-        if (!GV)
-            return LogErrorV(("Unknown variable name: " + VarName).c_str());
+        if (!GV) {
+            DEBUG_CODEGEN("  ERROR: Variable not found");
+            DUMP_SYMBOL_TABLE();
+            return LogScopeError(VarName, CurrentContext.toString());
+        }
         
-        // Type checking for globals
+        DEBUG_CODEGEN("  Assigning to global variable");
         Type* VarType = GV->getValueType();
+        DEBUG_VERBOSE("  Expected type: " + getTypeName(VarType));
+        
         if (Val->getType() != VarType) {
+            Type* OrigType = Val->getType();
             Val = castToType(Val, VarType);
-            if (!Val)
-                return LogErrorV("Type mismatch in assignment to global variable");
+            if (!Val) {
+                DEBUG_CODEGEN("  ERROR: Type conversion failed");
+                return LogTypeError("Type mismatch in assignment to global '" + VarName + "'",
+                                   VarType, OrigType);
+            }
+            DEBUG_VERBOSE("  Type converted from " + getTypeName(OrigType) + 
+                         " to " + getTypeName(VarType));
         }
         
         Builder.CreateStore(Val, GV);
+        DEBUG_CODEGEN("  Assignment successful");
         return Val;
     }
     
-    // Type checking for locals
+    DEBUG_CODEGEN("  Assigning to local variable");
     Type* VarType = Variable->getAllocatedType();
+    DEBUG_VERBOSE("  Expected type: " + getTypeName(VarType));
+    
     if (Val->getType() != VarType) {
+        Type* OrigType = Val->getType();
         Val = castToType(Val, VarType);
-        if (!Val)
-            return LogErrorV("Type mismatch in assignment");
+        if (!Val) {
+            DEBUG_CODEGEN("  ERROR: Type conversion failed");
+            return LogTypeError("Type mismatch in assignment to local '" + VarName + "'",
+                               VarType, OrigType);
+        }
+        DEBUG_VERBOSE("  Type converted from " + getTypeName(OrigType) + 
+                     " to " + getTypeName(VarType));
     }
     
     Builder.CreateStore(Val, Variable);
+    DEBUG_CODEGEN("  Assignment successful");
     return Val;
 }
 
 /// CallExprAST::codegen - Generate code for function calls
 Value* CallExprAST::codegen() {
-    Function* CalleeF = TheModule->getFunction(Callee);
-    if (!CalleeF)
-        return LogErrorV(("Unknown function referenced: " + Callee).c_str());
+    DEBUG_CODEGEN("Generating function call: " + Callee);
     
-    if (CalleeF->arg_size() != Args.size())
-        return LogErrorV("Incorrect number of arguments passed");
+    Function* CalleeF = TheModule->getFunction(Callee);
+    
+    if (!CalleeF) {
+        DEBUG_CODEGEN("  ERROR: Function not found");
+        
+        if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
+            fprintf(stderr, "  Available functions:\n");
+            for (auto& F : TheModule->functions()) {
+                fprintf(stderr, "    - %s\n", F.getName().str().c_str());
+            }
+        }
+        
+        std::string msg = "Call to undefined function '" + Callee + "'";
+        std::string suggestion = "";
+        
+        for (auto& F : TheModule->functions()) {
+            std::string FName = F.getName().str();
+            if (FName.find(Callee.substr(0, std::min((size_t)3, Callee.length()))) != std::string::npos) {
+                suggestion = "Did you mean '" + FName + "'?";
+                break;
+            }
+        }
+        
+        LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg, -1, -1, suggestion);
+        return nullptr;
+    }
+    
+    DEBUG_VERBOSE("  Function signature: " + getTypeName(CalleeF->getFunctionType()));
+    DEBUG_VERBOSE("  Expected args: " + std::to_string(CalleeF->arg_size()));
+    DEBUG_VERBOSE("  Provided args: " + std::to_string(Args.size()));
+    
+    if (CalleeF->arg_size() != Args.size()) {
+        DEBUG_CODEGEN("  ERROR: Argument count mismatch");
+        std::string msg = "Incorrect number of arguments in call to '" + Callee + "'";
+        msg += "\n  Expected: " + std::to_string(CalleeF->arg_size());
+        msg += "\n  Provided: " + std::to_string(Args.size());
+        LogCompilerError(ErrorType::SEMANTIC_OTHER, msg);
+        return nullptr;
+    }
     
     std::vector<Value*> ArgsV;
     unsigned Idx = 0;
+    
     for (auto &Arg : Args) {
+        DEBUG_VERBOSE("  Generating argument " + std::to_string(Idx));
+        
         Value* ArgVal = Arg->codegen();
         if (!ArgVal)
             return nullptr;
         
         Type* ExpectedType = CalleeF->getFunctionType()->getParamType(Idx);
-        if (ArgVal->getType() != ExpectedType) {
-            ArgVal = castToType(ArgVal, ExpectedType, true);  // Allow widening
+        Type* ActualType = ArgVal->getType();
+        
+        DEBUG_VERBOSE("    Expected: " + getTypeName(ExpectedType));
+        DEBUG_VERBOSE("    Actual: " + getTypeName(ActualType));
+        
+        if (ActualType != ExpectedType) {
+            ArgVal = castToType(ArgVal, ExpectedType, true);
             if (!ArgVal) {
-                return LogErrorV(("Type mismatch in function call argument " + 
-                                std::to_string(Idx)).c_str());
+                DEBUG_CODEGEN("  ERROR: Type conversion failed for argument " + 
+                             std::to_string(Idx));
+                std::string msg = "Type mismatch in argument " + std::to_string(Idx + 1) + 
+                                 " of function call '" + Callee + "'";
+                LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                               "Expected: " + getTypeName(ExpectedType) + 
+                               ", Got: " + getTypeName(ActualType));
+                return nullptr;
             }
+            DEBUG_VERBOSE("    Converted to: " + getTypeName(ExpectedType));
         }
         
         ArgsV.push_back(ArgVal);
         Idx++;
     }
+    
+    DEBUG_CODEGEN("  Call successful");
     
     if (CalleeF->getReturnType()->isVoidTy())
         return Builder.CreateCall(CalleeF, ArgsV);
@@ -3043,57 +3530,87 @@ Value* GlobVarDeclAST::codegen() {
 //===----------------------------------------------------------------------===//
 // Main driver code.
 //===----------------------------------------------------------------------===//
-
 int main(int argc, char **argv) {
-  if (argc == 2) {
-    pFile = fopen(argv[1], "r");
-    if (pFile == NULL)
-      perror("Error opening file");
-  } else {
-    std::cout << "Usage: ./code InputFile\n";
-    return 1;
-  }
+    initDebugLevel(argc, argv);
+    ShowCompilationProgress();
+    
+    std::string inputFile;
+    for (int i = 1; i < argc; i++) {
+        std::string arg = argv[i];
+        if (arg == "-d" || arg == "--debug") {
+            i++;
+            continue;
+        }
+        if (arg[0] != '-') {
+            inputFile = arg;
+            break;
+        }
+    }
+    
+    if (inputFile.empty()) {
+        std::cout << "Usage: ./mccomp [options] InputFile\n";
+        std::cout << "Options:\n";
+        std::cout << "  -d, --debug <level>   Set debug level (user, parser, codegen, verbose)\n";
+        std::cout << "\nOr set MCCOMP_DEBUG environment variable\n";
+        return 1;
+    }
+    
+    DEBUG_USER("Opening file: " + inputFile);
+    pFile = fopen(inputFile.c_str(), "r");
+    if (pFile == NULL) {
+        perror("Error opening file");
+        return 1;
+    }
 
-  // initialize line number and column numbers to zero
-  lineNo = 1;
-  columnNo = 1;
+    lineNo = 1;
+    columnNo = 1;
+    
+    DEBUG_USER("Starting lexical analysis...");
+    getNextToken();
+    
+    if (CurrentDebugLevel < DebugLevel::PARSER) {
+        fprintf(stderr, "Lexer Finished\n");
+    }
+    ShowPhaseComplete("Lexical analysis");
 
-  // get the first token
-  getNextToken();
+    TheModule = std::make_unique<Module>("mini-c", TheContext);
 
-  //while (CurTok.type != EOF_TOK) {
-  //  fprintf(stderr, "Token: %s with type %d\n", CurTok.lexeme.c_str(),
-  //          CurTok.type);
-  //  getNextToken();
-  //}
-  fprintf(stderr, "Lexer Finished\n");
+    DEBUG_USER("Starting parsing...");
+    parser();
+    
+    if (HasErrors) {
+        PrintAllErrors();
+        fclose(pFile);
+        return 1;
+    }
+    
+    if (CurrentDebugLevel < DebugLevel::PARSER) {
+        fprintf(stderr, "Parsing Finished\n");
+    }
+    ShowPhaseComplete("Parsing");
+    DEBUG_USER("Starting code generation...");
+    
+    printf("********************* FINAL IR (begin) ****************************\n");
+    
+    auto Filename = "output.ll";
+    std::error_code EC;
+    raw_fd_ostream dest(Filename, EC, sys::fs::OF_None);
 
-  // Make the module, which holds all the code.
-  TheModule = std::make_unique<Module>("mini-c", TheContext);
+    if (EC) {
+        errs() << "Could not open file: " << EC.message();
+        return 1;
+    }
+    
+    TheModule->print(dest, nullptr);
+    printf("********************* FINAL IR (end) ******************************\n");
 
-  // Run the parser now.
-
-  /* UNCOMMENT : Task 2 - Parser */
-  parser();
-  fprintf(stderr, "Parsing Finished\n");  
-
-  printf(
-      "********************* FINAL IR (begin) ****************************\n");
-  // Print out all of the generated code into a file called output.ll
-  // printf("%s\n", argv[1]);
-  auto Filename = "output.ll";
-  std::error_code EC;
-  raw_fd_ostream dest(Filename, EC, sys::fs::OF_None);
-
-  if (EC) {
-    errs() << "Could not open file: " << EC.message();
-    return 1;
-  }
-  // TheModule->print(errs(), nullptr); // print IR to terminal
-  TheModule->print(dest, nullptr);
-  printf(
-      "********************* FINAL IR (end) ******************************\n");
-
-  fclose(pFile); // close the file that contains the code that was parsed
-  return 0;
+    fclose(pFile);
+    
+    ShowPhaseComplete("Code generation");
+    
+    fprintf(stderr, "\n%s%s✓ Compilation Successful!%s\n", 
+            COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
+    fprintf(stderr, "Output: output.ll\n\n");
+    
+    return 0;
 }
