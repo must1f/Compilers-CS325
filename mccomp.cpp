@@ -44,7 +44,6 @@ static std::map<std::string, GlobalVariable*> GlobalValues;
 static std::map<std::string, std::string> VariableTypes;
 static Function *CurrentFunction = nullptr;
 
-
 //==============================================================================
 // TOKEN AND LEXER
 // Tokenization and lexical analysis
@@ -88,7 +87,6 @@ public:
 //===----------------------------------------------------------------------===//
 // Debug Infrastructure
 //===----------------------------------------------------------------------===//
-
 
 //==============================================================================
 // DEBUG INFRASTRUCTURE
@@ -379,8 +377,6 @@ struct TypeInfo {
         : typeName(name), isGlobal(global), line(l), column(c) {}
 };
 
-
-
 static std::map<std::string, TypeInfo> SymbolTypeTable;
 
 // TypeInfo - Structure to hold type information
@@ -556,8 +552,6 @@ enum TOKEN_TYPE {
   // invalid
   INVALID = -100 // signal invalid token
 };
-
-
 
 static std::string globalLexeme;
 static int lineNo, columnNo;
@@ -878,7 +872,6 @@ static TOKEN peekToken(int offset = 0) {
 static TOKEN peekNextToken() {
   return peekToken(0);
 }
-
 
 //==============================================================================
 // AST NODE CLASSES
@@ -1390,7 +1383,6 @@ public:
     
     return result;
   }
-
 };
 
 // while
@@ -1425,7 +1417,6 @@ public:
     
     return result;
   }
-
 };
 
 // a return value
@@ -1463,7 +1454,6 @@ public:
             std::string(COLOR_YELLOW) + "(void)" + std::string(COLOR_RESET);
     }
   }
-
 };
 
 // a function argumetn in a function call
@@ -1534,7 +1524,6 @@ static Function* LogErrorF(const char *Str) {
     LogCompilerError(ErrorType::SEMANTIC_OTHER, Str);
     return nullptr;
 }
-
 
 //===----------------------------------------------------------------------===//
 // AST Printing Helper
@@ -1719,7 +1708,6 @@ public:
 }
 };
 
-
 // assignments
 class AssignmentExprAST : public ASTnode {
   std::string VarName;  
@@ -1767,13 +1755,9 @@ public:
 }
 };
 
-
-
-
 //===----------------------------------------------------------------------===//
 // Recursive Descent - Function call for each production
 //===----------------------------------------------------------------------===//
-
 
 //==============================================================================
 // PARSER FUNCTIONS
@@ -1840,7 +1824,6 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
 
   return param_list;
 }
-
 
 // param ::= var_type IDENT ["[" INT_LIT "]"]*
 // Parse function parameter
@@ -2129,10 +2112,8 @@ static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &array
 //      | IDENT | IDENT "(" args ")"
 //      | INT_LIT | FLOAT_LIT | BOOL_LIT
 
-
 // args ::= arg_list
 //      |  ε
-
 
 // Helper function to parse function calls
 // Called when we've seen "IDENT ("
@@ -2235,9 +2216,6 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
   return LogError(CurTok, "expected expression");
 }
 
-
-
-
 // unary_expr ::= "-" unary_expr
 //            | "!" unary_expr
 //            | primary_expr
@@ -2266,7 +2244,6 @@ static std::unique_ptr<ASTnode> ParseUnaryExpr() {
   // Case 3: Primary expression (no unary operator)
   return ParsePrimaryExpr();
 }
-
 
 // mul_expr ::= unary_expr mul_expr_prime
 // mul_expr_prime ::= "*" unary_expr mul_expr_prime
@@ -2365,7 +2342,6 @@ static std::unique_ptr<ASTnode> ParseRelExpr() {
   return LHS;
 }
 
-
 // eq_expr ::= rel_expr eq_expr_prime
 // eq_expr_prime ::= "==" rel_expr eq_expr_prime
 //               | "!=" rel_expr eq_expr_prime
@@ -2390,7 +2366,6 @@ static std::unique_ptr<ASTnode> ParseEqExpr() {
   return LHS;
 }
 
-
 // and_expr ::= eq_expr and_expr_prime
 // and_expr_prime ::= "&&" eq_expr and_expr_prime
 //                | ε
@@ -2413,7 +2388,6 @@ static std::unique_ptr<ASTnode> ParseAndExpr() {
   return LHS;
 }
 
-
 // or_expr ::= and_expr or_expr_prime
 // or_expr_prime ::= "||" and_expr or_expr_prime
 //               | ε
@@ -2435,7 +2409,6 @@ static std::unique_ptr<ASTnode> ParseOrExpr() {
   
   return LHS;
 }
-
 
 // ParseExper - Parse an expression with LL(2) lookahead.
 //
@@ -2503,7 +2476,6 @@ static std::unique_ptr<ASTnode> ParseExper() {
     PARSER_EXIT("ParseExper", true);
     return LHS;
 }
-
 
 // expr_stmt ::= expr ";"
 //            |  ";"
@@ -3177,8 +3149,6 @@ static void ParseExternList() {
   }
 }
 
-
-
 // program ::= extern_list decl_list
 static void parser() {
   if (CurTok.type == EOF_TOK)
@@ -3194,7 +3164,6 @@ static void parser() {
 //===----------------------------------------------------------------------===//
 // Code Generation
 //===----------------------------------------------------------------------===//
-
 
 //===----------------------------------------------------------------------===//
 // Symbol Tables and Helper Functions
@@ -3283,7 +3252,6 @@ static Type* getArrayTypeForParam(const std::string& paramTypeStr) {
     }
     return elementType;
 }
-
 
 //===----------------------------------------------------------------------===//
 // Code Generation - AST Node Implementations
@@ -3410,11 +3378,6 @@ Value* VariableASTnode::codegen() {
 // Enhanced Type System
 //===----------------------------------------------------------------------===//
 
-
-
-
-
-
 // registerVariable - Register a variable in the symbol table with type info
 static void registerVariable(const std::string& varName, const std::string& typeName, 
                              bool isGlobal = false, int line = -1, int col = -1) {
@@ -3422,8 +3385,6 @@ static void registerVariable(const std::string& varName, const std::string& type
     DEBUG_VERBOSE("Registered variable '" + varName + "' with type '" + typeName + 
                  "' (global: " + (isGlobal ? "yes" : "no") + ")");
 }
-
-
 
 // checkFunctionExists - Check if function is declared
 static Function* checkFunctionExists(const std::string& funcName, int line = -1, int col = -1) {
@@ -3608,9 +3569,7 @@ static bool checkTypeCompatibility(Type* T1, Type* T2, const std::string& operat
     return false;
 }
 
-
 // Duplicate checkNarrowingConversion removed; use the earlier definition above.
-
 
 // promoteTypes - Promote two values to common type for binary operations
 static void promoteTypes(Value*& L, Value*& R) {
@@ -4378,7 +4337,6 @@ Function* FunctionPrototypeAST::codegen() {
     return TheFunction;
 }
 
-
 // GlobVarDeclAST::codegen - Generate code for global variable declarations
 Value* GlobVarDeclAST::codegen() {
     DEBUG_CODEGEN("Generating global variable: " + getName());
@@ -4734,8 +4692,6 @@ Value* ArrayAssignmentExprAST::codegen() {
     return Val;
 }
 
-
-
 //===----------------------------------------------------------------------===//
 // AST Printer
 //===----------------------------------------------------------------------===//
@@ -4743,7 +4699,6 @@ Value* ArrayAssignmentExprAST::codegen() {
 // void IntASTnode::display(int tabs) {
 //   printf("%s\n",getType().c_str());
 // }
-
 
 //===----------------------------------------------------------------------===//
 // Main driver code.
