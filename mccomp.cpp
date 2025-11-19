@@ -118,7 +118,7 @@ static void initDebugLevel(int argc, char** argv) {
             }
         }
     }
-    
+
     const char* envDebug = getenv("MCCOMP_DEBUG");
     if (envDebug) {
         std::string level = envDebug;
@@ -140,10 +140,10 @@ static void DEBUG_USER(const std::string& msg) {
 static void DEBUG_PARSER(const std::string& msg, int line = -1, int col = -1) {
     if (CurrentDebugLevel >= DebugLevel::PARSER) {
         if (line >= 0) {
-            fprintf(stderr, "%s[PARSER:%d:%d]%s %s\n", 
+            fprintf(stderr, "%s[PARSER:%d:%d]%s %s\n",
                     COLOR_GREEN.c_str(), line, col, COLOR_RESET.c_str(), msg.c_str());
         } else {
-            fprintf(stderr, "%s[PARSER]%s %s\n", 
+            fprintf(stderr, "%s[PARSER]%s %s\n",
                     COLOR_GREEN.c_str(), COLOR_RESET.c_str(), msg.c_str());
         }
     }
@@ -152,14 +152,14 @@ static void DEBUG_PARSER(const std::string& msg, int line = -1, int col = -1) {
 // Output code generation debug message
 static void DEBUG_CODEGEN(const std::string& msg) {
     if (CurrentDebugLevel >= DebugLevel::CODEGEN) {
-        fprintf(stderr, "%s[CODEGEN]%s %s\n", 
+        fprintf(stderr, "%s[CODEGEN]%s %s\n",
                 COLOR_YELLOW.c_str(), COLOR_RESET.c_str(), msg.c_str());
     }
 }
 
 static void DEBUG_VERBOSE(const std::string& msg) {
     if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
-        fprintf(stderr, "%s[VERBOSE]%s %s\n", 
+        fprintf(stderr, "%s[VERBOSE]%s %s\n",
                 COLOR_MAGENTA.c_str(), COLOR_RESET.c_str(), msg.c_str());
     }
 }
@@ -196,9 +196,9 @@ struct ParserContext {
     int blockDepth;
     bool inLoop;
     bool inConditional;
-    
+
     ParserContext() : currentFunction(""), blockDepth(0), inLoop(false), inConditional(false) {}
-    
+
     std::string toString() const {
         std::string result = "Function: " + (currentFunction.empty() ? "(global)" : currentFunction);
         result += ", Block depth: " + std::to_string(blockDepth);
@@ -225,7 +225,7 @@ static void ShowCompilationProgress() {
 // Display phase completion message
 static void ShowPhaseComplete(const std::string& phase) {
     if (CurrentDebugLevel >= DebugLevel::USER) {
-        fprintf(stderr, "%s✓%s %s complete\n", 
+        fprintf(stderr, "%s✓%s %s complete\n",
                 COLOR_GREEN.c_str(), COLOR_RESET.c_str(), phase.c_str());
     }
 }
@@ -249,14 +249,14 @@ public:
     int lineNo;
     int columnNo;
     std::string context;
-    
+
     CompilerError(ErrorType t, const std::string& msg, int line = -1, int col = -1, const std::string& ctx = "")
         : type(t), message(msg), lineNo(line), columnNo(col), context(ctx) {}
-    
+
     void print() const {
         std::string typeStr;
         std::string color;
-        
+
         switch(type) {
             case ErrorType::LEXICAL:
                 typeStr = "Lexical Error";
@@ -279,21 +279,21 @@ public:
                 color = COLOR_YELLOW;
                 break;
         }
-        
+
         fprintf(stderr, "%s%s%s", COLOR_BOLD.c_str(), color.c_str(), typeStr.c_str());
-        
+
         if (lineNo >= 0) {
             fprintf(stderr, " at line %d", lineNo);
             if (columnNo >= 0) {
                 fprintf(stderr, ", column %d", columnNo);
             }
         }
-        
+
         fprintf(stderr, ":%s\n", COLOR_RESET.c_str());
         fprintf(stderr, "  %s\n", message.c_str());
-        
+
         if (!context.empty()) {
-            fprintf(stderr, "  %sContext:%s %s\n", 
+            fprintf(stderr, "  %sContext:%s %s\n",
                     COLOR_CYAN.c_str(), COLOR_RESET.c_str(), context.c_str());
         }
         fprintf(stderr, "\n");
@@ -304,7 +304,7 @@ static std::vector<CompilerError> ErrorLog;
 static bool HasErrors = false;
 
 // Log compiler error with type, message, location
-static void LogCompilerError(ErrorType type, const std::string& msg, 
+static void LogCompilerError(ErrorType type, const std::string& msg,
                              int line = -1, int col = -1, const std::string& context = "") {
     HasErrors = true;
     ErrorLog.emplace_back(type, msg, line, col, context);
@@ -313,19 +313,19 @@ static void LogCompilerError(ErrorType type, const std::string& msg,
 // Print all accumulated compiler errors
 static void PrintAllErrors() {
     if (ErrorLog.empty()) return;
-    
+
     fprintf(stderr, "\n%s%s╔════════════════════════════════════════════════╗%s\n",
             COLOR_BOLD.c_str(), COLOR_RED.c_str(), COLOR_RESET.c_str());
-    fprintf(stderr, "%s%s║  Compilation Failed - %zu Error(s) Found", 
+    fprintf(stderr, "%s%s║  Compilation Failed - %zu Error(s) Found",
             COLOR_BOLD.c_str(), COLOR_RED.c_str(), ErrorLog.size());
-    
+
     int padding = 16 - std::to_string(ErrorLog.size()).length();
     for (int i = 0; i < padding; i++) fprintf(stderr, " ");
     fprintf(stderr, "║%s\n", COLOR_RESET.c_str());
-    
+
     fprintf(stderr, "%s%s╚════════════════════════════════════════════════╝%s\n\n",
             COLOR_BOLD.c_str(), COLOR_RED.c_str(), COLOR_RESET.c_str());
-    
+
     for (const auto& error : ErrorLog) {
         error.print();
     }
@@ -337,17 +337,17 @@ static void PrintAllErrors() {
 
 static std::string getTypeName(Type* T) {
     if (!T) return "unknown";
-    
+
     if (T->isVoidTy()) return "void";
     if (T->isIntegerTy(1)) return "bool";
     if (T->isIntegerTy(32)) return "int";
     if (T->isFloatTy()) return "float";
     if (T->isDoubleTy()) return "double";
-    
+
     if (T->isPointerTy()) {
         return "pointer";
     }
-    
+
     if (T->isFunctionTy()) {
         FunctionType* FT = cast<FunctionType>(T);
         std::string result = getTypeName(FT->getReturnType()) + "(";
@@ -358,7 +358,7 @@ static std::string getTypeName(Type* T) {
         result += ")";
         return result;
     }
-    
+
     std::string typeStr;
     llvm::raw_string_ostream rso(typeStr);
     T->print(rso);
@@ -371,7 +371,7 @@ struct TypeInfo {
     bool isGlobal;
     int line;
     int column;
-    
+
     TypeInfo() : typeName("unknown"), isGlobal(false), line(-1), column(-1) {}
     TypeInfo(const std::string& name, bool global = false, int l = -1, int c = -1)
         : typeName(name), isGlobal(global), line(l), column(c) {}
@@ -393,9 +393,9 @@ static TypeInfo* getTypeInfo(const std::string& varName) {
 // Display symbol table for debugging
 static void DUMP_SYMBOL_TABLE() {
     if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
-        fprintf(stderr, "\n%s[SYMBOL TABLE DUMP]%s\n", 
+        fprintf(stderr, "\n%s[SYMBOL TABLE DUMP]%s\n",
                 COLOR_CYAN.c_str(), COLOR_RESET.c_str());
-        
+
         fprintf(stderr, "  Symbol Type Table:\n");
         if (SymbolTypeTable.empty()) {
             fprintf(stderr, "    (empty)\n");
@@ -409,37 +409,37 @@ static void DUMP_SYMBOL_TABLE() {
                         pair.second.column);
             }
         }
-        
+
         fprintf(stderr, "  Local Variables (NamedValues):\n");
         if (NamedValues.empty()) {
             fprintf(stderr, "    (empty)\n");
         } else {
             for (const auto& pair : NamedValues) {
                 std::string typeName = getTypeName(pair.second->getAllocatedType());
-                fprintf(stderr, "    %s: %s\n", 
-                        pair.first.c_str(), 
+                fprintf(stderr, "    %s: %s\n",
+                        pair.first.c_str(),
                         typeName.c_str());
             }
         }
-        
+
         fprintf(stderr, "  Global Variables (GlobalValues):\n");
         if (GlobalValues.empty()) {
             fprintf(stderr, "    (empty)\n");
         } else {
             for (const auto& pair : GlobalValues) {
                 std::string typeName = getTypeName(pair.second->getValueType());
-                fprintf(stderr, "    %s: %s\n", 
-                        pair.first.c_str(), 
+                fprintf(stderr, "    %s: %s\n",
+                        pair.first.c_str(),
                         typeName.c_str());
             }
         }
-        
+
         fprintf(stderr, "  Functions:\n");
         bool hasFunctions = false;
         for (auto& F : TheModule->functions()) {
             if (!F.empty() || F.isDeclaration()) {
                 std::string typeName = getTypeName(F.getFunctionType());
-                fprintf(stderr, "    %s: %s\n", 
+                fprintf(stderr, "    %s: %s\n",
                         F.getName().str().c_str(),
                         typeName.c_str());
                 hasFunctions = true;
@@ -448,7 +448,7 @@ static void DUMP_SYMBOL_TABLE() {
         if (!hasFunctions) {
             fprintf(stderr, "    (empty)\n");
         }
-        
+
         fprintf(stderr, "  Current Context: %s\n", CurrentContext.toString().c_str());
         fprintf(stderr, "\n");
     }
@@ -461,23 +461,23 @@ static void DUMP_SYMBOL_TABLE() {
 namespace ASTPrint {
   // Global indentation level for tree printing
   static int indentLevel = 0;
-  
+
   // Generate indentation string
   static std::string indent() {
     return std::string(indentLevel * 2, ' ');
   }
-  
+
   // Tree drawing characters
   static const char* BRANCH = "├─ ";
   static const char* LAST_BRANCH = "└─ ";
   static const char* VERTICAL = "│  ";
   static const char* SPACE = "   ";
-  
+
   // Helper to print with tree structure
   static std::string treePrefix(bool isLast) {
     return isLast ? LAST_BRANCH : BRANCH;
   }
-  
+
   // Helper to continue tree lines
   static std::string treeContinue(bool isLast) {
     return isLast ? SPACE : VERTICAL;
@@ -903,12 +903,12 @@ public:
   IntASTnode(TOKEN tok, int val) : Val(val), Tok(tok) {}
   const std::string &getType() const { return Tok.lexeme; }
   int getValue() const { return Val; }
-  
+
   virtual Value *codegen() override;
 
   virtual std::string to_string() const override {
-    return std::string(COLOR_CYAN) + "IntLiteral" + std::string(COLOR_RESET) + "(" + 
-           std::string(COLOR_BOLD) + std::to_string(Val) + std::string(COLOR_RESET) + 
+    return std::string(COLOR_CYAN) + "IntLiteral" + std::string(COLOR_RESET) + "(" +
+           std::string(COLOR_BOLD) + std::to_string(Val) + std::string(COLOR_RESET) +
            " : " + std::string(COLOR_YELLOW) + Tok.lexeme + std::string(COLOR_RESET) + ")";
   }
 };
@@ -924,10 +924,10 @@ public:
   bool getValue() const { return Bool; }
 
   virtual Value *codegen() override;
-  
+
   virtual std::string to_string() const override {
-    return std::string(COLOR_CYAN) + "BoolLiteral" + std::string(COLOR_RESET) + "(" + 
-           std::string(COLOR_BOLD) + std::string(Bool ? "true" : "false") + std::string(COLOR_RESET) + 
+    return std::string(COLOR_CYAN) + "BoolLiteral" + std::string(COLOR_RESET) + "(" +
+           std::string(COLOR_BOLD) + std::string(Bool ? "true" : "false") + std::string(COLOR_RESET) +
            " : " + std::string(COLOR_YELLOW) + Tok.lexeme + std::string(COLOR_RESET) + ")";
   }
 };
@@ -941,12 +941,12 @@ public:
   FloatASTnode(TOKEN tok, double Val) : Val(Val), Tok(tok) {}
   const std::string &getType() const { return Tok.lexeme; }
   double getValue() const { return Val; }
-  
+
   virtual Value *codegen() override;
 
   virtual std::string to_string() const override {
-    return std::string(COLOR_CYAN) + "FloatLiteral" + std::string(COLOR_RESET) + "(" + 
-           std::string(COLOR_BOLD) + std::to_string(Val) + std::string(COLOR_RESET) + 
+    return std::string(COLOR_CYAN) + "FloatLiteral" + std::string(COLOR_RESET) + "(" +
+           std::string(COLOR_BOLD) + std::to_string(Val) + std::string(COLOR_RESET) +
            " : " + std::string(COLOR_YELLOW) + Tok.lexeme + std::string(COLOR_RESET) + ")";
   }
 };
@@ -970,7 +970,7 @@ public:
   virtual Value *codegen() override;
 
   virtual std::string to_string() const override {
-    return std::string(COLOR_GREEN) + "VarRef" + std::string(COLOR_RESET) + "(" + 
+    return std::string(COLOR_GREEN) + "VarRef" + std::string(COLOR_RESET) + "(" +
            std::string(COLOR_BOLD) + Name + std::string(COLOR_RESET) + ")";
   }
 };
@@ -1009,8 +1009,8 @@ public:
   const std::string &getName() const override { return Var->getName(); }
 
   virtual std::string to_string() const override {
-    return std::string(COLOR_CYAN) + "VarDecl" + std::string(COLOR_RESET) + " [" + 
-           std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " + 
+    return std::string(COLOR_CYAN) + "VarDecl" + std::string(COLOR_RESET) + " [" +
+           std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " +
            std::string(COLOR_BOLD) + Var->getName() + std::string(COLOR_RESET) + "]";
   }
 };
@@ -1122,17 +1122,17 @@ public:
   Function* codegen();
 
   std::string to_string() const {
-    std::string result = std::string(COLOR_CYAN) + "FunctionProto" + std::string(COLOR_RESET) + " '" + 
+    std::string result = std::string(COLOR_CYAN) + "FunctionProto" + std::string(COLOR_RESET) + " '" +
                         std::string(COLOR_BOLD) + Name + std::string(COLOR_RESET) + "'\n";
-    
+
     result += ASTPrint::indent() + ASTPrint::BRANCH;
-    result += std::string(COLOR_BLUE) + "ReturnType: " + std::string(COLOR_RESET) + 
+    result += std::string(COLOR_BLUE) + "ReturnType: " + std::string(COLOR_RESET) +
              std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + "\n";
-    
+
     result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
-    result += std::string(COLOR_BLUE) + "Parameters (" + std::to_string(Params.size()) + 
+    result += std::string(COLOR_BLUE) + "Parameters (" + std::to_string(Params.size()) +
              "):" + std::string(COLOR_RESET);
-    
+
     if (Params.empty()) {
       result += " " + std::string(COLOR_YELLOW) + "(none)" + std::string(COLOR_RESET);
     } else {
@@ -1141,13 +1141,13 @@ public:
       for (size_t i = 0; i < Params.size(); i++) {
         bool isLast = (i == Params.size() - 1);
         result += ASTPrint::indent() + ASTPrint::treePrefix(isLast);
-        result += std::string(COLOR_YELLOW) + Params[i]->getType() + std::string(COLOR_RESET) + " " + 
+        result += std::string(COLOR_YELLOW) + Params[i]->getType() + std::string(COLOR_RESET) + " " +
                  std::string(COLOR_BOLD) + Params[i]->getName() + std::string(COLOR_RESET);
         if (!isLast) result += "\n";
       }
       ASTPrint::indentLevel--;
     }
-    
+
     return result;
   }
 };
@@ -1173,18 +1173,18 @@ public:
   BlockAST(std::vector<std::unique_ptr<DeclAST>> localDecls,
            std::vector<std::unique_ptr<ASTnode>> stmts)
       : LocalDecls(std::move(localDecls)), Stmts(std::move(stmts)) {}
-  
+
   virtual Value *codegen() override;
 
   virtual std::string to_string() const override {
     std::string result = std::string(COLOR_CYAN) + "Block" + std::string(COLOR_RESET) + "\n";
-    
+
     // Print local declarations
     if (!LocalDecls.empty()) {
       result += ASTPrint::indent() + ASTPrint::BRANCH;
-      result += std::string(COLOR_BLUE) + "LocalDecls (" + std::to_string(LocalDecls.size()) + 
+      result += std::string(COLOR_BLUE) + "LocalDecls (" + std::to_string(LocalDecls.size()) +
                "):" + std::string(COLOR_RESET) + "\n";
-      
+
       ASTPrint::indentLevel++;
       for (size_t i = 0; i < LocalDecls.size(); i++) {
         bool isLast = (i == LocalDecls.size() - 1) && Stmts.empty();
@@ -1194,20 +1194,20 @@ public:
       }
       ASTPrint::indentLevel--;
     }
-    
+
     // Print statements
     if (!Stmts.empty()) {
       if (!LocalDecls.empty()) result += "\n";
-      
+
       result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
-      result += std::string(COLOR_BLUE) + "Statements (" + std::to_string(Stmts.size()) + 
+      result += std::string(COLOR_BLUE) + "Statements (" + std::to_string(Stmts.size()) +
                "):" + std::string(COLOR_RESET) + "\n";
-      
+
       ASTPrint::indentLevel++;
       for (size_t i = 0; i < Stmts.size(); i++) {
         bool isLast = (i == Stmts.size() - 1);
         result += ASTPrint::indent() + ASTPrint::treePrefix(isLast);
-        
+
         if (Stmts[i]) {
           std::string stmtStr = Stmts[i]->to_string();
           // Don't add extra newline - just append the statement directly
@@ -1215,17 +1215,17 @@ public:
         } else {
           result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
         }
-        
+
         if (!isLast) result += "\n";
       }
       ASTPrint::indentLevel--;
     }
-    
+
     if (LocalDecls.empty() && Stmts.empty()) {
       result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
       result += std::string(COLOR_YELLOW) + "(empty)" + std::string(COLOR_RESET);
     }
-    
+
     return result;
   }
 };
@@ -1289,13 +1289,13 @@ public:
   virtual Value *codegen() override;
 
   virtual std::string to_string() const override {
-    std::string result = std::string(COLOR_GREEN) + std::string(COLOR_BOLD) + "╔═══ FunctionDecl ═══╗" 
+    std::string result = std::string(COLOR_GREEN) + std::string(COLOR_BOLD) + "╔═══ FunctionDecl ═══╗"
                         + std::string(COLOR_RESET) + "\n";
-    
+
     ASTPrint::indentLevel++;
     result += ASTPrint::indent() + Proto->to_string() + "\n";
     result += ASTPrint::indent() + std::string(COLOR_BLUE) + "Body:" + std::string(COLOR_RESET) + "\n";
-    
+
     ASTPrint::indentLevel++;
     if (Block) {
       result += ASTPrint::indent() + Block->to_string();
@@ -1304,10 +1304,10 @@ public:
     }
     ASTPrint::indentLevel--;
     ASTPrint::indentLevel--;
-    
-    result += "\n" + ASTPrint::indent() + 
+
+    result += "\n" + ASTPrint::indent() +
              std::string(COLOR_GREEN) + std::string(COLOR_BOLD) + "╚════════════════════╝" + std::string(COLOR_RESET);
-    
+
     return result;
   }
 };
@@ -1325,9 +1325,9 @@ public:
 
   virtual std::string to_string() const override {
     std::string result = std::string(COLOR_MAGENTA) + "IfStmt" + std::string(COLOR_RESET) + "\n";
-    
+
     ASTPrint::indentLevel++;
-    
+
     // Condition
     result += ASTPrint::indent() + ASTPrint::BRANCH;
     result += std::string(COLOR_BLUE) + "Condition: " + std::string(COLOR_RESET);
@@ -1345,7 +1345,7 @@ public:
       result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
     }
     result += "\n";
-    
+
     // Then block
     bool hasElse = (Else != nullptr);
     result += ASTPrint::indent() + (hasElse ? ASTPrint::BRANCH : ASTPrint::LAST_BRANCH);
@@ -1363,7 +1363,7 @@ public:
     } else {
       result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
     }
-    
+
     // Else block (if present)
     if (hasElse) {
       result += "\n" + ASTPrint::indent() + ASTPrint::LAST_BRANCH;
@@ -1378,9 +1378,9 @@ public:
         result += elseStr;
       }
     }
-    
+
     ASTPrint::indentLevel--;
-    
+
     return result;
   }
 };
@@ -1397,24 +1397,24 @@ public:
 
   virtual std::string to_string() const override {
     std::string result = std::string(COLOR_MAGENTA) + "WhileStmt" + std::string(COLOR_RESET) + "\n";
-    
+
     // Condition
     result += ASTPrint::indent() + ASTPrint::BRANCH;
     result += std::string(COLOR_BLUE) + "Condition:" + std::string(COLOR_RESET) + "\n";
     ASTPrint::indentLevel++;
-    result += ASTPrint::indent() + (Cond ? Cond->to_string() : 
+    result += ASTPrint::indent() + (Cond ? Cond->to_string() :
              std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET));
     ASTPrint::indentLevel--;
     result += "\n";
-    
+
     // Body
     result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
     result += std::string(COLOR_BLUE) + "Body:" + std::string(COLOR_RESET) + "\n";
     ASTPrint::indentLevel++;
-    result += ASTPrint::indent() + (Body ? Body->to_string() : 
+    result += ASTPrint::indent() + (Body ? Body->to_string() :
              std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET));
     ASTPrint::indentLevel--;
-    
+
     return result;
   }
 };
@@ -1431,11 +1431,11 @@ public:
   virtual std::string to_string() const override {
     if (Val) {
       std::string result = std::string(COLOR_MAGENTA) + "ReturnStmt" + std::string(COLOR_RESET) + "\n";
-      
+
       ASTPrint::indentLevel++;
       result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
       result += std::string(COLOR_BLUE) + "Value: " + std::string(COLOR_RESET);
-      
+
       std::string valStr = Val->to_string();
       if (valStr.find('\n') != std::string::npos) {
         result += "\n";
@@ -1445,12 +1445,12 @@ public:
       } else {
         result += valStr;
       }
-      
+
       ASTPrint::indentLevel--;
-      
+
       return result;
     } else {
-      return std::string(COLOR_MAGENTA) + "ReturnStmt " + std::string(COLOR_RESET) + 
+      return std::string(COLOR_MAGENTA) + "ReturnStmt " + std::string(COLOR_RESET) +
             std::string(COLOR_YELLOW) + "(void)" + std::string(COLOR_RESET);
     }
   }
@@ -1472,7 +1472,7 @@ public:
 //===----------------------------------------------------------------------===//
 
 static std::unique_ptr<ASTnode> LogError(TOKEN tok, const char *Str) {
-    LogCompilerError(ErrorType::SYNTAX, Str, tok.lineNo, tok.columnNo, 
+    LogCompilerError(ErrorType::SYNTAX, Str, tok.lineNo, tok.columnNo,
                      "Token: '" + tok.lexeme + "'");
     return nullptr;
 }
@@ -1504,9 +1504,9 @@ static Value* LogErrorV(const std::string& Str) {
 
 // Log type mismatch error
 static Value* LogTypeError(const std::string& msg, Type* expected, Type* actual) {
-    std::string fullMsg = msg + "\n  Expected: " + 
-                         getTypeName(expected) + 
-                         "\n  Actual: " + 
+    std::string fullMsg = msg + "\n  Expected: " +
+                         getTypeName(expected) +
+                         "\n  Actual: " +
                          getTypeName(actual);
     LogCompilerError(ErrorType::SEMANTIC_TYPE, fullMsg);
     return nullptr;
@@ -1531,20 +1531,20 @@ static Function* LogErrorF(const char *Str) {
 
 static void printAST(const std::unique_ptr<ASTnode>& node, const std::string& label) {
   if (!node) {
-    fprintf(stderr, "\n%s%s=== %s ===%s\n", 
+    fprintf(stderr, "\n%s%s=== %s ===%s\n",
             COLOR_BOLD.c_str(), COLOR_RED.c_str(), label.c_str(), COLOR_RESET.c_str());
     fprintf(stderr, "%sNode is nullptr!%s\n\n", COLOR_RED.c_str(), COLOR_RESET.c_str());
     return;
   }
-  
-  fprintf(stderr, "\n%s%s╔═══════════════════════════════════════╗%s\n", 
+
+  fprintf(stderr, "\n%s%s╔═══════════════════════════════════════╗%s\n",
           COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
-  fprintf(stderr, "%s%s║  %s%-35s%s%s║%s\n", 
-          COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str(), label.c_str(), 
+  fprintf(stderr, "%s%s║  %s%-35s%s%s║%s\n",
+          COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str(), label.c_str(),
           COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
-  fprintf(stderr, "%s%s╚═══════════════════════════════════════╝%s\n\n", 
+  fprintf(stderr, "%s%s╚═══════════════════════════════════════╝%s\n\n",
           COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
-  
+
   ASTPrint::indentLevel = 0;
   fprintf(stderr, "%s\n\n", node->to_string().c_str());
 }
@@ -1555,7 +1555,7 @@ class BinaryExprAST : public ASTnode {
   std::unique_ptr<ASTnode> LHS, RHS;
 
 public:
-  BinaryExprAST(std::string op, std::unique_ptr<ASTnode> lhs, std::unique_ptr<ASTnode> rhs) : 
+  BinaryExprAST(std::string op, std::unique_ptr<ASTnode> lhs, std::unique_ptr<ASTnode> rhs) :
                 Op(op), LHS(std::move(lhs)), RHS(std::move(rhs)) {}
 
   const std::string &getOp() const {return Op;}
@@ -1565,11 +1565,11 @@ public:
   virtual Value* codegen() override;
 
   virtual std::string to_string() const override {
-    std::string result = std::string(COLOR_MAGENTA) + "BinaryExpr [" + 
+    std::string result = std::string(COLOR_MAGENTA) + "BinaryExpr [" +
                         std::string(COLOR_BOLD) + Op + std::string(COLOR_RESET) + "]\n";
-    
+
     ASTPrint::indentLevel++;
-    
+
     // Print left operand
     result += ASTPrint::indent() + ASTPrint::BRANCH;
     result += std::string(COLOR_BLUE) + "LHS: " + std::string(COLOR_RESET);
@@ -1587,7 +1587,7 @@ public:
       result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
     }
     result += "\n";
-    
+
     // Print right operand
     result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
     result += std::string(COLOR_BLUE) + "RHS: " + std::string(COLOR_RESET);
@@ -1604,31 +1604,31 @@ public:
     } else {
       result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
     }
-    
+
     ASTPrint::indentLevel--;
-    
+
     return result;
   }
 };
 
 // unary operators
 class UnaryExprAST : public ASTnode {
-  std::string Op; 
+  std::string Op;
   std::unique_ptr<ASTnode> Operand;
 
 public:
   UnaryExprAST(std::string op, std::unique_ptr<ASTnode> operand)
       : Op(op), Operand(std::move(operand)) {}
-  
+
   const std::string &getOp() const { return Op; }
   std::unique_ptr<ASTnode> &getOperand() { return Operand; }
 
   virtual Value* codegen() override;
 
   virtual std::string to_string() const override {
-    std::string result = std::string(COLOR_MAGENTA) + "UnaryExpr" + std::string(COLOR_RESET) + " [" + 
+    std::string result = std::string(COLOR_MAGENTA) + "UnaryExpr" + std::string(COLOR_RESET) + " [" +
                         std::string(COLOR_BOLD) + Op + std::string(COLOR_RESET) + "]\n";
-    
+
     result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
     result += std::string(COLOR_BLUE) + "Operand: " + std::string(COLOR_RESET);
     if (Operand) {
@@ -1643,36 +1643,36 @@ public:
     } else {
       result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
     }
-    
+
     return result;
   }
 };
 
 // function calls
 class CallExprAST : public ASTnode {
-  std::string Callee;  
-  std::vector<std::unique_ptr<ASTnode>> Args;  
+  std::string Callee;
+  std::vector<std::unique_ptr<ASTnode>> Args;
 
 public:
   CallExprAST(const std::string &callee,
               std::vector<std::unique_ptr<ASTnode>> args)
       : Callee(callee), Args(std::move(args)) {}
-  
+
   const std::string &getCallee() const { return Callee; }
   std::vector<std::unique_ptr<ASTnode>> &getArgs() { return Args; }
 
   virtual Value* codegen() override;
 
   virtual std::string to_string() const override {
-  std::string result = std::string(COLOR_MAGENTA) + "FunctionCall '" + 
+  std::string result = std::string(COLOR_MAGENTA) + "FunctionCall '" +
                       std::string(COLOR_BOLD) + Callee + std::string(COLOR_RESET) + "'\n";
-  
+
   ASTPrint::indentLevel++;
-  
+
   result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
-  result += std::string(COLOR_BLUE) + "Arguments (" + std::to_string(Args.size()) + 
+  result += std::string(COLOR_BLUE) + "Arguments (" + std::to_string(Args.size()) +
            "):" + std::string(COLOR_RESET);
-  
+
   if (Args.empty()) {
     result += " " + std::string(COLOR_YELLOW) + "(none)" + std::string(COLOR_RESET);
   } else {
@@ -1682,7 +1682,7 @@ public:
       bool isLast = (i == Args.size() - 1);
       result += ASTPrint::indent() + ASTPrint::treePrefix(isLast);
       result += std::string(COLOR_BLUE) + "Arg[" + std::to_string(i) + "]: " + std::string(COLOR_RESET);
-      
+
       if (Args[i]) {
         std::string argStr = Args[i]->to_string();
         if (argStr.find('\n') != std::string::npos) {
@@ -1696,28 +1696,28 @@ public:
       } else {
         result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
       }
-      
+
       if (!isLast) result += "\n";
     }
     ASTPrint::indentLevel--;
   }
-  
+
   ASTPrint::indentLevel--;
-  
+
   return result;
 }
 };
 
 // assignments
 class AssignmentExprAST : public ASTnode {
-  std::string VarName;  
-  std::unique_ptr<ASTnode> RHS;  
+  std::string VarName;
+  std::unique_ptr<ASTnode> RHS;
 
 public:
   AssignmentExprAST(const std::string &varname,
                     std::unique_ptr<ASTnode> rhs)
       : VarName(varname), RHS(std::move(rhs)) {}
-  
+
   const std::string &getVarName() const { return VarName; }
   std::unique_ptr<ASTnode> &getRHS() { return RHS; }
 
@@ -1725,16 +1725,16 @@ public:
 
   virtual std::string to_string() const override {
   std::string result = std::string(COLOR_MAGENTA) + "AssignmentExpr" + std::string(COLOR_RESET) + "\n";
-  
+
   ASTPrint::indentLevel++;
-  
+
   result += ASTPrint::indent() + ASTPrint::BRANCH;
-  result += std::string(COLOR_BLUE) + "Target: " + std::string(COLOR_RESET) + 
+  result += std::string(COLOR_BLUE) + "Target: " + std::string(COLOR_RESET) +
            std::string(COLOR_BOLD) + VarName + std::string(COLOR_RESET) + "\n";
-  
+
   result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
   result += std::string(COLOR_BLUE) + "Value: " + std::string(COLOR_RESET);
-  
+
   if (RHS) {
     std::string rhsStr = RHS->to_string();
     if (rhsStr.find('\n') != std::string::npos) {
@@ -1748,9 +1748,9 @@ public:
   } else {
     result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
   }
-  
+
   ASTPrint::indentLevel--;
-  
+
   return result;
 }
 };
@@ -2120,32 +2120,32 @@ static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &array
 static std::unique_ptr<ASTnode> ParseFunctionCall(const std::string &callee, TOKEN tok) {
   // At this point, we've already consumed IDENT and '('
   // Current token should be start of args or ')'
-  
+
   std::vector<std::unique_ptr<ASTnode>> args;
-  
+
   // Check if there are no arguments
   if (CurTok.type == RPAR) {
     // Empty argument list
     return std::make_unique<CallExprAST>(callee, std::move(args));
   }
-  
+
   // Parse first argument
   auto arg = ParseExper();
   if (!arg)
     return nullptr;
   args.push_back(std::move(arg));
-  
+
   // Parse remaining arguments (if any)
   while (CurTok.type == COMMA) {
     getNextToken(); // eat ','
-    
+
     arg = ParseExper();
     if (!arg)
       return nullptr;
-    
+
     args.push_back(std::move(arg));
   }
-  
+
   return std::make_unique<CallExprAST>(callee, std::move(args));
 }
 // primary_expr ::= "(" expr ")"
@@ -2155,21 +2155,21 @@ static std::unique_ptr<ASTnode> ParseFunctionCall(const std::string &callee, TOK
 //              | FLOAT_LIT
 //              | BOOL_LIT
 static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
-  
+
   // Case 1: Parenthesized expression
   if (CurTok.type == LPAR) {
     getNextToken(); // eat '('
     auto expr = ParseExper();
     if (!expr)
       return nullptr;
-    
+
     if (CurTok.type != RPAR)
       return LogError(CurTok, "expected ')'");
-    
+
     getNextToken(); // eat ')'
     return expr;
   }
-  
+
   // Case 2: Identifier (variable, array access, or function call)
   if (CurTok.type == IDENT) {
     std::string idName = CurTok.getIdentifierStr();
@@ -2202,17 +2202,17 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
     // Just a variable reference
     return std::make_unique<VariableASTnode>(idTok, idName);
   }
-  
+
   // Case 3-5: Literals
   if (CurTok.type == INT_LIT)
     return ParseIntNumberExpr();
-  
+
   if (CurTok.type == FLOAT_LIT)
     return ParseFloatNumberExpr();
-  
+
   if (CurTok.type == BOOL_LIT)
     return ParseBoolExpr();
-  
+
   return LogError(CurTok, "expected expression");
 }
 
@@ -2220,27 +2220,27 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
 //            | "!" unary_expr
 //            | primary_expr
 static std::unique_ptr<ASTnode> ParseUnaryExpr() {
-  
+
   // Case 1: Unary minus
   if (CurTok.type == MINUS) {
     getNextToken(); // eat '-'
     auto operand = ParseUnaryExpr();
     if (!operand)
       return nullptr;
-    
+
     return std::make_unique<UnaryExprAST>("-", std::move(operand));
   }
-  
+
   // Case 2: Unary not
   if (CurTok.type == NOT) {
     getNextToken(); // eat '!'
-    auto operand = ParseUnaryExpr(); 
+    auto operand = ParseUnaryExpr();
     if (!operand)
       return nullptr;
-    
+
     return std::make_unique<UnaryExprAST>("!", std::move(operand));
   }
-  
+
   // Case 3: Primary expression (no unary operator)
   return ParsePrimaryExpr();
 }
@@ -2255,29 +2255,29 @@ static std::unique_ptr<ASTnode> ParseMulExpr() {
   auto LHS = ParseUnaryExpr();
   if (!LHS)
     return nullptr;
-  
+
   // Parse mul_expr_prime (handle *, /, % operators)
   while (CurTok.type == ASTERIX || CurTok.type == DIV || CurTok.type == MOD) {
     std::string op;
-    
+
     if (CurTok.type == ASTERIX)
       op = "*";
     else if (CurTok.type == DIV)
       op = "/";
     else if (CurTok.type == MOD)
       op = "%";
-    
+
     getNextToken(); // eat the operator
-    
+
     // Parse the right-hand side
     auto RHS = ParseUnaryExpr();
     if (!RHS)
       return nullptr;
-    
+
     // Create binary expression and make it the new LHS
     LHS = std::make_unique<BinaryExprAST>(op, std::move(LHS), std::move(RHS));
   }
-  
+
   return LHS;
 }
 
@@ -2289,19 +2289,19 @@ static std::unique_ptr<ASTnode> ParseAddExpr() {
   auto LHS = ParseMulExpr(); // Parse higher precedence first
   if (!LHS)
     return nullptr;
-  
+
   // Handle + and - operators
   while (CurTok.type == PLUS || CurTok.type == MINUS) {
     std::string op = (CurTok.type == PLUS) ? "+" : "-";
     getNextToken(); // eat operator
-    
+
     auto RHS = ParseMulExpr(); // Parse higher precedence on right
     if (!RHS)
       return nullptr;
-    
+
     LHS = std::make_unique<BinaryExprAST>(op, std::move(LHS), std::move(RHS));
   }
-  
+
   return LHS;
 }
 
@@ -2315,12 +2315,12 @@ static std::unique_ptr<ASTnode> ParseRelExpr() {
   auto LHS = ParseAddExpr();
   if (!LHS)
     return nullptr;
-  
+
   // Handle <, <=, >, >= operators
-  while (CurTok.type == LT || CurTok.type == LE || 
+  while (CurTok.type == LT || CurTok.type == LE ||
          CurTok.type == GT || CurTok.type == GE) {
     std::string op;
-    
+
     if (CurTok.type == LT)
       op = "<";
     else if (CurTok.type == LE)
@@ -2329,16 +2329,16 @@ static std::unique_ptr<ASTnode> ParseRelExpr() {
       op = ">";
     else if (CurTok.type == GE)
       op = ">=";
-    
+
     getNextToken(); // eat operator
-    
+
     auto RHS = ParseAddExpr();
     if (!RHS)
       return nullptr;
-    
+
     LHS = std::make_unique<BinaryExprAST>(op, std::move(LHS), std::move(RHS));
   }
-  
+
   return LHS;
 }
 
@@ -2350,19 +2350,19 @@ static std::unique_ptr<ASTnode> ParseEqExpr() {
   auto LHS = ParseRelExpr();
   if (!LHS)
     return nullptr;
-  
+
   // Handle == and != operators
   while (CurTok.type == EQ || CurTok.type == NE) {
     std::string op = (CurTok.type == EQ) ? "==" : "!=";
     getNextToken(); // eat operator
-    
+
     auto RHS = ParseRelExpr();
     if (!RHS)
       return nullptr;
-    
+
     LHS = std::make_unique<BinaryExprAST>(op, std::move(LHS), std::move(RHS));
   }
-  
+
   return LHS;
 }
 
@@ -2373,18 +2373,18 @@ static std::unique_ptr<ASTnode> ParseAndExpr() {
   auto LHS = ParseEqExpr();
   if (!LHS)
     return nullptr;
-  
+
   // Handle && operator
   while (CurTok.type == AND) {
     getNextToken(); // eat '&&'
-    
+
     auto RHS = ParseEqExpr();
     if (!RHS)
       return nullptr;
-    
+
     LHS = std::make_unique<BinaryExprAST>("&&", std::move(LHS), std::move(RHS));
   }
-  
+
   return LHS;
 }
 
@@ -2395,18 +2395,18 @@ static std::unique_ptr<ASTnode> ParseOrExpr() {
   auto LHS = ParseAndExpr();
   if (!LHS)
     return nullptr;
-  
+
   // Handle || operator
   while (CurTok.type == OR) {
     getNextToken(); // eat '||'
-    
+
     auto RHS = ParseAndExpr();
     if (!RHS)
       return nullptr;
-    
+
     LHS = std::make_unique<BinaryExprAST>("||", std::move(LHS), std::move(RHS));
   }
-  
+
   return LHS;
 }
 
@@ -3000,7 +3000,7 @@ static std::unique_ptr<ASTnode> ParseDecl() {
             IdName, PrevTok.lexeme, std::move(P));
         std::unique_ptr<ASTnode> funcDecl = std::make_unique<FunctionDeclAST>(std::move(Proto),
                                                                        std::move(B));
-        
+
         funcDecl->codegen();
         printAST(funcDecl, "Function: " + IdName);
         return funcDecl;
@@ -3108,10 +3108,10 @@ static void ParseExternListPrime() {
   if (CurTok.type == EXTERN) { // FIRST(extern)
     if (auto Extern = ParseExtern()) {
       fprintf(stderr, "Parsed a top-level external function declaration -- 2\n");
-      
+
       // Generate code for external function declaration
       if (Function* ExternF = Extern->codegen()) {
-          fprintf(stderr, "Generated code for external function: %s\n", 
+          fprintf(stderr, "Generated code for external function: %s\n",
                   Extern->getName().c_str());
       } else {
           fprintf(stderr, "Error generating code for external function: %s\n",
@@ -3134,16 +3134,16 @@ static void ParseExternList() {
   auto Extern = ParseExtern();
   if (Extern) {
     fprintf(stderr, "Parsed a top-level external function declaration -- 1\n");
-    
+
     // Generate code for external function declaration
     if (Function* ExternF = Extern->codegen()) {
-        fprintf(stderr, "Generated code for external function: %s\n", 
+        fprintf(stderr, "Generated code for external function: %s\n",
                 Extern->getName().c_str());
     } else {
         fprintf(stderr, "Error generating code for external function: %s\n",
                 Extern->getName().c_str());
     }
-    
+
     if (CurTok.type == EXTERN)
       ParseExternListPrime();
   }
@@ -3285,7 +3285,7 @@ Value* BoolASTnode::codegen() {
 // checkVariableInScope - Check if variable is in scope and return its type
 static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1, int col = -1) {
     DEBUG_CODEGEN("Checking scope for variable: " + varName);
-    
+
     // Check local scope first
     if (NamedValues.find(varName) != NamedValues.end()) {
         TypeInfo* info = getTypeInfo(varName);
@@ -3294,7 +3294,7 @@ static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1,
             return info;
         }
     }
-    
+
     // Check global scope
     if (GlobalValues.find(varName) != GlobalValues.end()) {
         TypeInfo* info = getTypeInfo(varName);
@@ -3303,7 +3303,7 @@ static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1,
             return info;
         }
     }
-    
+
     // Variable not found
     DEBUG_CODEGEN("  ERROR: Variable not found in any scope");
     std::string msg = "Undefined variable '" + varName + "'";
@@ -3319,7 +3319,7 @@ static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1,
 // VariableASTnode::codegen - Generate LLVM IR for variable references
 Value* VariableASTnode::codegen() {
     DEBUG_CODEGEN("Loading variable: " + Name);
-    
+
     // Check scope and get type information
     TypeInfo* typeInfo = checkVariableInScope(Name, Tok.lineNo, Tok.columnNo);
     if (!typeInfo) {
@@ -3327,13 +3327,13 @@ Value* VariableASTnode::codegen() {
         DUMP_SYMBOL_TABLE();
         return nullptr;
     }
-    
+
     // Try local scope first
     AllocaInst* V = NamedValues[Name];
     if (V) {
         DEBUG_CODEGEN("  Found in local scope: " + getTypeName(V->getAllocatedType()));
         DEBUG_CODEGEN("  Type from symbol table: " + typeInfo->typeName);
-        
+
         // Verify type consistency
         Type* expectedType = getTypeFromString(typeInfo->typeName);
         if (V->getAllocatedType() != expectedType) {
@@ -3342,16 +3342,16 @@ Value* VariableASTnode::codegen() {
                            Tok.lineNo, Tok.columnNo);
             return nullptr;
         }
-        
+
         return Builder.CreateLoad(V->getAllocatedType(), V, Name.c_str());
     }
-    
+
     // Try global scope
     GlobalVariable* GV = GlobalValues[Name];
     if (GV) {
         DEBUG_CODEGEN("  Found in global scope: " + getTypeName(GV->getValueType()));
         DEBUG_CODEGEN("  Type from symbol table: " + typeInfo->typeName);
-        
+
         // Verify type consistency
         Type* expectedType = getTypeFromString(typeInfo->typeName);
         if (GV->getValueType() != expectedType) {
@@ -3360,10 +3360,10 @@ Value* VariableASTnode::codegen() {
                            Tok.lineNo, Tok.columnNo);
             return nullptr;
         }
-        
+
         return Builder.CreateLoad(GV->getValueType(), GV, Name.c_str());
     }
-    
+
     // Should never reach here if checkVariableInScope worked correctly
     DEBUG_CODEGEN("  INTERNAL ERROR: Variable found in symbol table but not in scope maps");
     DUMP_SYMBOL_TABLE();
@@ -3379,22 +3379,22 @@ Value* VariableASTnode::codegen() {
 //===----------------------------------------------------------------------===//
 
 // registerVariable - Register a variable in the symbol table with type info
-static void registerVariable(const std::string& varName, const std::string& typeName, 
+static void registerVariable(const std::string& varName, const std::string& typeName,
                              bool isGlobal = false, int line = -1, int col = -1) {
     SymbolTypeTable[varName] = TypeInfo(typeName, isGlobal, line, col);
-    DEBUG_VERBOSE("Registered variable '" + varName + "' with type '" + typeName + 
+    DEBUG_VERBOSE("Registered variable '" + varName + "' with type '" + typeName +
                  "' (global: " + (isGlobal ? "yes" : "no") + ")");
 }
 
 // checkFunctionExists - Check if function is declared
 static Function* checkFunctionExists(const std::string& funcName, int line = -1, int col = -1) {
     DEBUG_CODEGEN("Checking function: " + funcName);
-    
+
     Function* F = TheModule->getFunction(funcName);
     if (!F) {
         DEBUG_CODEGEN("  ERROR: Function not found");
         std::string msg = "Call to undefined function '" + funcName + "'";
-        
+
         // Provide suggestions for similar function names
         std::string suggestion;
         for (auto& Fn : TheModule->functions()) {
@@ -3404,11 +3404,11 @@ static Function* checkFunctionExists(const std::string& funcName, int line = -1,
                 break;
             }
         }
-        
+
         LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg + suggestion, line, col);
         return nullptr;
     }
-    
+
     DEBUG_CODEGEN("  Function found: " + getTypeName(F->getFunctionType()));
     return F;
 }
@@ -3423,7 +3423,7 @@ static Type* getValueType(Value* V) {
 static bool isNarrowingConversion(Type* From, Type* To) {
     if (!From || !To) return false;
     if (From == To) return false;
-    
+
     if (From->isFloatTy() && To->isIntegerTy(32))
         return true;
     if (From->isIntegerTy(32) && To->isIntegerTy(1))
@@ -3432,48 +3432,48 @@ static bool isNarrowingConversion(Type* From, Type* To) {
         return true;
     if (From->isFloatTy() && To->isIntegerTy(1))
         return true;
-    
+
     return false;
 }
 
 // isWideningConversion - Check if conversion is widening (safe)
 static bool isWideningConversion(Type* From, Type* To) {
     if (!From || !To) return false;
-    
+
     // int to float is widening
     if (From->isIntegerTy(32) && To->isFloatTy())
         return true;
-    
+
     // bool to int is widening
     if (From->isIntegerTy(1) && To->isIntegerTy(32))
         return true;
-    
+
     // bool to float is widening (through int)
     if (From->isIntegerTy(1) && To->isFloatTy())
         return true;
-    
+
     // float to double is widening
     if (From->isFloatTy() && To->isDoubleTy())
         return true;
-    
+
     return false;
 }
 
 // castToType - Perform type conversions with proper checking
-static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true, 
+static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
                          const std::string& context = "") {
     if (!V || !DestTy) {
         DEBUG_CODEGEN("  ERROR: Null value or type in castToType");
         return nullptr;
     }
-    
+
     Type* SrcTy = V->getType();
-    
+
     if (SrcTy == DestTy)
         return V;
-    
+
     DEBUG_VERBOSE("  Type conversion needed: " + getTypeName(SrcTy) + " -> " + getTypeName(DestTy));
-    
+
     // Check for narrowing conversion
     if (!allowNarrowing && isNarrowingConversion(SrcTy, DestTy)) {
         std::string msg = "Narrowing conversion not allowed";
@@ -3484,40 +3484,40 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
         LogCompilerError(ErrorType::SEMANTIC_TYPE, msg);
         return nullptr;
     }
-    
+
     // Perform widening conversions
-    
+
     // int to float (widening)
     if (SrcTy->isIntegerTy(32) && DestTy->isFloatTy()) {
         DEBUG_VERBOSE("  Converting int to float");
         return Builder.CreateSIToFP(V, DestTy, "itof");
     }
-    
+
     // bool to int (widening)
     if (SrcTy->isIntegerTy(1) && DestTy->isIntegerTy(32)) {
         DEBUG_VERBOSE("  Converting bool to int");
         return Builder.CreateZExt(V, DestTy, "btoi");
     }
-    
+
     // bool to float (widening through int)
     if (SrcTy->isIntegerTy(1) && DestTy->isFloatTy()) {
         DEBUG_VERBOSE("  Converting bool to float (via int)");
         Value* AsInt = Builder.CreateZExt(V, Type::getInt32Ty(TheContext), "btoi");
         return Builder.CreateSIToFP(AsInt, DestTy, "itof");
     }
-    
+
     // double to float conversion (handle APFloat operations)
     if (SrcTy->isDoubleTy() && DestTy->isFloatTy()) {
         DEBUG_VERBOSE("  Converting double to float");
         return Builder.CreateFPTrunc(V, DestTy, "fptrunc");
     }
-    
+
     // float to double conversion
     if (SrcTy->isFloatTy() && DestTy->isDoubleTy()) {
         DEBUG_VERBOSE("  Converting float to double");
         return Builder.CreateFPExt(V, DestTy, "fpext");
     }
-    
+
     // Narrowing conversions (only if allowed)
     if (allowNarrowing) {
         // float to int (narrowing)
@@ -3525,20 +3525,20 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
             DEBUG_VERBOSE("  Converting float to int (narrowing - allowed)");
             return Builder.CreateFPToSI(V, DestTy, "ftoi");
         }
-        
+
         // int to bool (narrowing - used in conditionals)
         if (SrcTy->isIntegerTy(32) && DestTy->isIntegerTy(1)) {
             DEBUG_VERBOSE("  Converting int to bool (narrowing - allowed)");
             return Builder.CreateICmpNE(V, ConstantInt::get(SrcTy, 0), "tobool");
         }
-        
+
         // float/double to bool for conditionals
         if ((SrcTy->isFloatTy() || SrcTy->isDoubleTy()) && DestTy->isIntegerTy(1)) {
             DEBUG_VERBOSE("  Converting float/double to bool");
             return Builder.CreateFCmpONE(V, ConstantFP::get(SrcTy, 0.0), "tobool");
         }
     }
-    
+
     // Unsupported conversion
     std::string msg = "Cannot convert between types";
     if (!context.empty()) {
@@ -3552,20 +3552,20 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
 // checkTypeCompatibility - Check if two types are compatible for operations
 static bool checkTypeCompatibility(Type* T1, Type* T2, const std::string& operation) {
     if (!T1 || !T2) return false;
-    
+
     // Same types are always compatible
     if (T1 == T2) return true;
-    
+
     // Numeric types are compatible with each other (with conversion)
     bool t1Numeric = T1->isIntegerTy(32) || T1->isFloatTy() || T1->isIntegerTy(1);
     bool t2Numeric = T2->isIntegerTy(32) || T2->isFloatTy() || T2->isIntegerTy(1);
-    
+
     if (t1Numeric && t2Numeric) return true;
-    
+
     DEBUG_CODEGEN("  Type incompatibility in " + operation);
     DEBUG_CODEGEN("    Type 1: " + getTypeName(T1));
     DEBUG_CODEGEN("    Type 2: " + getTypeName(T2));
-    
+
     return false;
 }
 
@@ -3575,10 +3575,10 @@ static bool checkTypeCompatibility(Type* T1, Type* T2, const std::string& operat
 static void promoteTypes(Value*& L, Value*& R) {
     Type* LTy = L->getType();
     Type* RTy = R->getType();
-    
+
     if (LTy == RTy)
         return;
-    
+
     // **FIX: Normalize f64 to f32 first**
     if (LTy->isDoubleTy()) {
         L = Builder.CreateFPTrunc(L, Type::getFloatTy(TheContext), "fptrunc");
@@ -3588,7 +3588,7 @@ static void promoteTypes(Value*& L, Value*& R) {
         R = Builder.CreateFPTrunc(R, Type::getFloatTy(TheContext), "fptrunc");
         RTy = R->getType();
     }
-    
+
     // Now promote to float if either is float
     if (LTy->isFloatTy() && RTy->isIntegerTy(32)) {
         R = Builder.CreateSIToFP(R, LTy, "itof");
@@ -3614,27 +3614,27 @@ static void promoteTypes(Value*& L, Value*& R) {
 // BinaryExprAST::codegen - Generate code for binary operators
 Value* BinaryExprAST::codegen() {
     DEBUG_CODEGEN("Generating binary expression: " + Op);
-    
+
     Value* L = LHS->codegen();
     Value* R = RHS->codegen();
-    
+
     if (!L || !R) {
         DEBUG_CODEGEN("  ERROR: Failed to generate operands");
         return nullptr;
     }
-    
+
     DEBUG_VERBOSE("  LHS type: " + getTypeName(L->getType()));
     DEBUG_VERBOSE("  RHS type: " + getTypeName(R->getType()));
-    
+
     Type* OrigLTy = L->getType();
     Type* OrigRTy = R->getType();
-    
+
     promoteTypes(L, R);
-    
+
     DEBUG_VERBOSE("  After promotion: " + getTypeName(L->getType()));
-    
+
     Type* OpType = L->getType();
-    
+
     if (Op == "+") {
         DEBUG_CODEGEN("  Creating addition");
         if (OpType->isFloatingPointTy())
@@ -3648,7 +3648,7 @@ Value* BinaryExprAST::codegen() {
             return nullptr;
         }
     }
-    
+
     if (Op == "-") {
         DEBUG_CODEGEN("  Creating subtraction");
         if (OpType->isFloatingPointTy())
@@ -3662,7 +3662,7 @@ Value* BinaryExprAST::codegen() {
             return nullptr;
         }
     }
-    
+
     if (Op == "*") {
         DEBUG_CODEGEN("  Creating multiplication");
         if (OpType->isFloatingPointTy())
@@ -3676,7 +3676,7 @@ Value* BinaryExprAST::codegen() {
             return nullptr;
         }
     }
-    
+
     if (Op == "/") {
         DEBUG_CODEGEN("  Creating division");
         if (OpType->isFloatingPointTy())
@@ -3690,7 +3690,7 @@ Value* BinaryExprAST::codegen() {
             return nullptr;
         }
     }
-    
+
     if (Op == "%") {
         DEBUG_CODEGEN("  Creating modulo");
         if (OpType->isIntegerTy())
@@ -3702,7 +3702,7 @@ Value* BinaryExprAST::codegen() {
             return nullptr;
         }
       }
-    
+
     if (Op == "<") {
     DEBUG_CODEGEN("  Creating less than comparison");
     if (OpType->isFloatingPointTy())
@@ -3786,22 +3786,22 @@ Value* BinaryExprAST::codegen() {
             return nullptr;
         }
     }
-    
+
     if (Op == "&&") {
         DEBUG_CODEGEN("  Creating logical AND");
         L = castToType(L, Type::getInt1Ty(TheContext));
         R = castToType(R, Type::getInt1Ty(TheContext));
         return Builder.CreateAnd(L, R, "and");
     }
-    
+
     if (Op == "||") {
         DEBUG_CODEGEN("  Creating logical OR");
         L = castToType(L, Type::getInt1Ty(TheContext));
         R = castToType(R, Type::getInt1Ty(TheContext));
         return Builder.CreateOr(L, R, "or");
     }
-    
-    LogCompilerError(ErrorType::SEMANTIC_OTHER, 
+
+    LogCompilerError(ErrorType::SEMANTIC_OTHER,
                     "Unknown binary operator: '" + Op + "'");
     return nullptr;
 }
@@ -3809,16 +3809,16 @@ Value* BinaryExprAST::codegen() {
 // UnaryExprAST::codegen - Generate code for unary operators
 Value* UnaryExprAST::codegen() {
     DEBUG_CODEGEN("Generating unary expression: " + Op);
-    
+
     Value* OperandV = Operand->codegen();
     if (!OperandV) {
         DEBUG_CODEGEN("  ERROR: Failed to generate operand");
         return nullptr;
     }
-    
+
     Type* OpType = OperandV->getType();
     DEBUG_VERBOSE("  Operand type: " + getTypeName(OpType));
-    
+
     if (Op == "-") {
         if (OpType->isFloatingPointTy()) {
             DEBUG_CODEGEN("  Creating floating-point negation");
@@ -3833,7 +3833,7 @@ Value* UnaryExprAST::codegen() {
             return nullptr;
         }
     }
-    
+
     if (Op == "!") {
         DEBUG_CODEGEN("  Creating logical NOT");
         OperandV = castToType(OperandV, Type::getInt1Ty(TheContext));
@@ -3842,8 +3842,8 @@ Value* UnaryExprAST::codegen() {
         }
         return Builder.CreateNot(OperandV, "not");
     }
-    
-    LogCompilerError(ErrorType::SEMANTIC_OTHER, 
+
+    LogCompilerError(ErrorType::SEMANTIC_OTHER,
                     "Unknown unary operator: '" + Op + "'");
     return nullptr;
 }
@@ -3851,17 +3851,17 @@ Value* UnaryExprAST::codegen() {
 // AssignmentExprAST::codegen - Generate code for assignments
 Value* AssignmentExprAST::codegen() {
     DEBUG_CODEGEN("Generating assignment to: " + VarName);
-    
+
     Value* Val = RHS->codegen();
     if (!Val) {
         DEBUG_CODEGEN("  ERROR: Failed to generate RHS");
         return nullptr;
     }
-    
+
     DEBUG_VERBOSE("  RHS type: " + getTypeName(Val->getType()));
-    
+
     AllocaInst* Variable = NamedValues[VarName];
-    
+
     if (!Variable) {
         GlobalVariable* GV = GlobalValues[VarName];
         if (!GV) {
@@ -3869,11 +3869,11 @@ Value* AssignmentExprAST::codegen() {
             DUMP_SYMBOL_TABLE();
             return LogScopeError(VarName, CurrentContext.toString());
         }
-        
+
         DEBUG_CODEGEN("  Assigning to global variable");
         Type* VarType = GV->getValueType();
         DEBUG_VERBOSE("  Expected type: " + getTypeName(VarType));
-        
+
         if (Val->getType() != VarType) {
             Type* OrigType = Val->getType();
             Val = castToType(Val, VarType);
@@ -3882,19 +3882,19 @@ Value* AssignmentExprAST::codegen() {
                 return LogTypeError("Type mismatch in assignment to global '" + VarName + "'",
                                    VarType, OrigType);
             }
-            DEBUG_VERBOSE("  Type converted from " + getTypeName(OrigType) + 
+            DEBUG_VERBOSE("  Type converted from " + getTypeName(OrigType) +
                          " to " + getTypeName(VarType));
         }
-        
+
         Builder.CreateStore(Val, GV);
         DEBUG_CODEGEN("  Assignment successful");
         return Val;
     }
-    
+
     DEBUG_CODEGEN("  Assigning to local variable");
     Type* VarType = Variable->getAllocatedType();
     DEBUG_VERBOSE("  Expected type: " + getTypeName(VarType));
-    
+
     if (Val->getType() != VarType) {
         Type* OrigType = Val->getType();
         Val = castToType(Val, VarType);
@@ -3903,10 +3903,10 @@ Value* AssignmentExprAST::codegen() {
             return LogTypeError("Type mismatch in assignment to local '" + VarName + "'",
                                VarType, OrigType);
         }
-        DEBUG_VERBOSE("  Type converted from " + getTypeName(OrigType) + 
+        DEBUG_VERBOSE("  Type converted from " + getTypeName(OrigType) +
                      " to " + getTypeName(VarType));
     }
-    
+
     Builder.CreateStore(Val, Variable);
     DEBUG_CODEGEN("  Assignment successful");
     return Val;
@@ -3915,57 +3915,57 @@ Value* AssignmentExprAST::codegen() {
 // CallExprAST::codegen - Generate code for function calls
 Value* CallExprAST::codegen() {
     DEBUG_CODEGEN("Generating function call: " + Callee);
-    
+
     // Check if function exists
     Function* CalleeF = checkFunctionExists(Callee);
     if (!CalleeF) {
         // Error already logged
         return nullptr;
     }
-    
+
     DEBUG_VERBOSE("  Function signature: " + getTypeName(CalleeF->getFunctionType()));
     DEBUG_VERBOSE("  Expected args: " + std::to_string(CalleeF->arg_size()));
     DEBUG_VERBOSE("  Provided args: " + std::to_string(Args.size()));
-    
+
     // Check argument count
     if (CalleeF->arg_size() != Args.size()) {
         DEBUG_CODEGEN("  ERROR: Argument count mismatch");
-        std::string msg = "Function '" + Callee + "' expects " + 
+        std::string msg = "Function '" + Callee + "' expects " +
                          std::to_string(CalleeF->arg_size()) + " argument(s), but " +
                          std::to_string(Args.size()) + " provided";
         LogCompilerError(ErrorType::SEMANTIC_TYPE, msg);
         return nullptr;
     }
-    
+
     std::vector<Value*> ArgsV;
     unsigned Idx = 0;
-    
+
     for (auto &Arg : Args) {
         DEBUG_VERBOSE("  Generating argument " + std::to_string(Idx));
-        
+
         Value* ArgVal = Arg->codegen();
         if (!ArgVal)
             return nullptr;
-        
+
         Type* ExpectedType = CalleeF->getFunctionType()->getParamType(Idx);
         Type* ActualType = ArgVal->getType();
-        
+
         DEBUG_VERBOSE("    Expected: " + getTypeName(ExpectedType));
         DEBUG_VERBOSE("    Actual: " + getTypeName(ActualType));
-        
+
         // Check type compatibility and convert if needed
         if (ActualType != ExpectedType) {
             // Per spec: allow widening, disallow narrowing
             if (isNarrowingConversion(ActualType, ExpectedType)) {
-                std::string msg = "Narrowing conversion in argument " + std::to_string(Idx + 1) + 
+                std::string msg = "Narrowing conversion in argument " + std::to_string(Idx + 1) +
                                 " of function '" + Callee + "'";
                 msg += "\n  Expected: " + getTypeName(ExpectedType);
                 msg += "\n  Provided: " + getTypeName(ActualType);
                 LogCompilerError(ErrorType::SEMANTIC_TYPE, msg);
                 return nullptr;
             }
-            
-            ArgVal = castToType(ArgVal, ExpectedType, false, 
+
+            ArgVal = castToType(ArgVal, ExpectedType, false,
                                "function call argument " + std::to_string(Idx + 1));
             if (!ArgVal) {
                 // Error already logged
@@ -3973,13 +3973,13 @@ Value* CallExprAST::codegen() {
             }
             DEBUG_VERBOSE("    Converted successfully");
         }
-        
+
         ArgsV.push_back(ArgVal);
         Idx++;
     }
-    
+
     DEBUG_CODEGEN("  Call successful");
-    
+
     if (CalleeF->getReturnType()->isVoidTy())
         return Builder.CreateCall(CalleeF, ArgsV);
     else
@@ -3991,23 +3991,23 @@ Value* IfExprAST::codegen() {
     Value* CondV = Cond->codegen();
     if (!CondV)
         return nullptr;
-    
+
     // Convert condition to bool
     CondV = castToType(CondV, Type::getInt1Ty(TheContext));
-    
+
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
-    
+
     // Create blocks for then, else, and merge
     BasicBlock* ThenBB = BasicBlock::Create(TheContext, "then", TheFunction);
     BasicBlock* ElseBB = BasicBlock::Create(TheContext, "else");
     BasicBlock* MergeBB = BasicBlock::Create(TheContext, "ifcont");
-    
+
     if (Else) {
         Builder.CreateCondBr(CondV, ThenBB, ElseBB);
     } else {
         Builder.CreateCondBr(CondV, ThenBB, MergeBB);
     }
-    
+
     // Emit then block
     Builder.SetInsertPoint(ThenBB);
     Value* ThenV = Then->codegen();
@@ -4015,7 +4015,7 @@ Value* IfExprAST::codegen() {
         return nullptr;
     Builder.CreateBr(MergeBB);
     ThenBB = Builder.GetInsertBlock();
-    
+
     // Emit else block
     if (Else) {
         TheFunction->insert(TheFunction->end(), ElseBB);
@@ -4026,109 +4026,109 @@ Value* IfExprAST::codegen() {
         Builder.CreateBr(MergeBB);
         ElseBB = Builder.GetInsertBlock();
     }
-    
+
     // Emit merge block
     TheFunction->insert(TheFunction->end(), MergeBB);
     Builder.SetInsertPoint(MergeBB);
-    
+
     return Constant::getNullValue(Type::getInt32Ty(TheContext));
 }
 
 // WhileExprAST::codegen - Generate code for while loops
 Value* WhileExprAST::codegen() {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
-    
+
     // Create blocks for loop
     BasicBlock* LoopBB = BasicBlock::Create(TheContext, "loop", TheFunction);
     BasicBlock* BodyBB = BasicBlock::Create(TheContext, "body");
     BasicBlock* AfterBB = BasicBlock::Create(TheContext, "afterloop");
-    
+
     // Branch to loop header
     Builder.CreateBr(LoopBB);
-    
+
     // Emit loop header (condition check)
     Builder.SetInsertPoint(LoopBB);
     Value* CondV = Cond->codegen();
     if (!CondV)
         return nullptr;
-    
+
     // Convert condition to bool
     CondV = castToType(CondV, Type::getInt1Ty(TheContext));
-    
+
     Builder.CreateCondBr(CondV, BodyBB, AfterBB);
-    
+
     // Emit loop body
     TheFunction->insert(TheFunction->end(), BodyBB);
     Builder.SetInsertPoint(BodyBB);
     Value* BodyV = Body->codegen();
     if (!BodyV)
         return nullptr;
-    
+
     // Branch back to loop header
     Builder.CreateBr(LoopBB);
-    
+
     // Emit after block
     TheFunction->insert(TheFunction->end(), AfterBB);
     Builder.SetInsertPoint(AfterBB);
-    
+
     return Constant::getNullValue(Type::getInt32Ty(TheContext));
 }
 
 // ReturnAST::codegen - Generate code for return statements
 Value* ReturnAST::codegen() {
     DEBUG_CODEGEN("Generating return statement");
-    
+
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     Type* FuncRetType = TheFunction->getReturnType();
-    
+
     // Case 1: Void return
     if (!Val) {
         if (!FuncRetType->isVoidTy()) {
             DEBUG_CODEGEN("  ERROR: Non-void function must return a value");
-            return LogErrorV("Non-void function '" + 
-                           TheFunction->getName().str() + 
+            return LogErrorV("Non-void function '" +
+                           TheFunction->getName().str() +
                            "' must return a value");
         }
         DEBUG_CODEGEN("  Creating void return");
         return Builder.CreateRetVoid();
     }
-    
+
     // Case 2: Value return
     if (FuncRetType->isVoidTy()) {
         DEBUG_CODEGEN("  ERROR: Void function cannot return a value");
-        return LogErrorV("Void function '" + 
-                       TheFunction->getName().str() + 
+        return LogErrorV("Void function '" +
+                       TheFunction->getName().str() +
                        "' cannot return a value");
     }
-    
+
     Value* RetVal = Val->codegen();
     if (!RetVal)
         return nullptr;
-    
+
     Type* RetType = RetVal->getType();
     DEBUG_VERBOSE("  Return value type: " + getTypeName(RetType));
     DEBUG_VERBOSE("  Function return type: " + getTypeName(FuncRetType));
-    
+
     if (RetType != FuncRetType) {
         // Check if this is a narrowing conversion (NOT ALLOWED per spec)
         if (isNarrowingConversion(RetType, FuncRetType)) {
             DEBUG_CODEGEN("  ERROR: Narrowing conversion in return");
-            std::string msg = "Return type mismatch in function '" + 
-                            TheFunction->getName().str() + 
+            std::string msg = "Return type mismatch in function '" +
+                            TheFunction->getName().str() +
                             "' - narrowing conversion not allowed";
             return LogTypeError(msg, FuncRetType, RetType);
         }
-        
+
         // Widening conversion (ALLOWED per spec)
         DEBUG_VERBOSE("  Applying widening conversion");
         RetVal = castToType(RetVal, FuncRetType, /*allowNarrowing=*/false);
         if (!RetVal) {
             DEBUG_CODEGEN("  ERROR: Type conversion failed");
-            return LogTypeError("Cannot convert return value type", 
+            return LogTypeError("Cannot convert return value type",
                               FuncRetType, RetType);
         }
     }
-    
+
     DEBUG_CODEGEN("  Return successful");
     return Builder.CreateRet(RetVal);
 }
@@ -4137,7 +4137,7 @@ Value* ReturnAST::codegen() {
 Value* BlockAST::codegen() {
     std::map<std::string, AllocaInst*> OldBindings;
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
-    
+
     // Generate code for local declarations
     for (auto& decl : LocalDecls) {
         const std::string& VarName = decl->getName();
@@ -4188,7 +4188,7 @@ Value* BlockAST::codegen() {
             registerVariable(VarName, TypeStr, false);  // Register in symbol table
         }
     }
-    
+
     // Generate code for statements
     Value* LastVal = nullptr;
     for (auto& stmt : Stmts) {
@@ -4199,12 +4199,12 @@ Value* BlockAST::codegen() {
             LastVal = StmtVal;
         }
     }
-    
+
     // Restore old bindings
     for (auto& binding : OldBindings) {
         NamedValues[binding.first] = binding.second;
     }
-    
+
     // Remove variables that went out of scope
     for (auto& decl : LocalDecls) {
         if (OldBindings.find(decl->getName()) == OldBindings.end()) {
@@ -4212,7 +4212,7 @@ Value* BlockAST::codegen() {
             VariableTypes.erase(decl->getName());
         }
     }
-    
+
     return LastVal ? LastVal : Constant::getNullValue(Type::getInt32Ty(TheContext));
 }
 
@@ -4220,38 +4220,38 @@ Value* BlockAST::codegen() {
 Value* FunctionDeclAST::codegen() {
     // Check if function already exists
     Function* TheFunction = TheModule->getFunction(Proto->getName());
-    
+
     if (!TheFunction) {
         // Create function type
         Type* RetType = getTypeFromString(Proto->getType());
         std::vector<Type*> ParamTypes;
-        
+
         for (auto& param : Proto->getParams()) {
             ParamTypes.push_back(getTypeFromString(param->getType()));
         }
-        
+
         FunctionType* FT = FunctionType::get(RetType, ParamTypes, false);
-        TheFunction = Function::Create(FT, Function::ExternalLinkage, 
+        TheFunction = Function::Create(FT, Function::ExternalLinkage,
                                       Proto->getName(), TheModule.get());
-        
+
         // Set parameter names
         unsigned Idx = 0;
         for (auto& Arg : TheFunction->args()) {
             Arg.setName(Proto->getParams()[Idx++]->getName());
         }
     }
-    
+
     // Create entry block
     BasicBlock* BB = BasicBlock::Create(TheContext, "entry", TheFunction);
     Builder.SetInsertPoint(BB);
-    
+
     // Save old function
     Function* OldFunction = CurrentFunction;
     CurrentFunction = TheFunction;
-    
+
     // Clear variable scope
     NamedValues.clear();
-    
+
     // Create allocas for parameters
     unsigned Idx = 0;
     for (auto& Arg : TheFunction->args()) {
@@ -4263,7 +4263,7 @@ Value* FunctionDeclAST::codegen() {
         VariableTypes[ArgName] = TypeStr;
         registerVariable(ArgName, TypeStr, false);  // Register parameter in symbol table
     }
-    
+
     // Generate function body
     if (Value* RetVal = Block->codegen()) {
         // Check if the last block has a terminator
@@ -4281,18 +4281,18 @@ Value* FunctionDeclAST::codegen() {
                 }
             }
         }
-        
+
         // Verify function
         verifyFunction(*TheFunction);
 
         for (auto& param : Proto->getParams()) {
             SymbolTypeTable.erase(param->getName());
         }
-        
+
         CurrentFunction = OldFunction;
         return TheFunction;
     }
-    
+
     // Error - remove function
     TheFunction->eraseFromParent();
     CurrentFunction = OldFunction;
@@ -4306,13 +4306,13 @@ Function* FunctionPrototypeAST::codegen() {
     if (TheFunction) {
         return TheFunction;
     }
-    
+
     // Use llvm::Type to avoid conflict with class member 'Type'
     llvm::Type* RetType = getTypeFromString(getType());
     if (!RetType) {
         return LogErrorF("Invalid return type in function prototype");
     }
-    
+
     std::vector<llvm::Type*> ParamTypes;
     for (auto& param : getParams()) {
         llvm::Type* ParamType = getTypeFromString(param->getType());
@@ -4321,41 +4321,41 @@ Function* FunctionPrototypeAST::codegen() {
         }
         ParamTypes.push_back(ParamType);
     }
-    
+
     FunctionType* FT = FunctionType::get(RetType, ParamTypes, false);
-    
+
     // Create function with external linkage
-    TheFunction = Function::Create(FT, Function::ExternalLinkage, 
+    TheFunction = Function::Create(FT, Function::ExternalLinkage,
                                    getName(), TheModule.get());
-    
+
     // Set parameter names
     unsigned Idx = 0;
     for (auto& Arg : TheFunction->args()) {
         Arg.setName(getParams()[Idx++]->getName());
     }
-    
+
     return TheFunction;
 }
 
 // GlobVarDeclAST::codegen - Generate code for global variable declarations
 Value* GlobVarDeclAST::codegen() {
     DEBUG_CODEGEN("Generating global variable: " + getName());
-    
+
     // Check if variable already exists
     if (GlobalValues.find(getName()) != GlobalValues.end()) {
         std::string msg = "Redeclaration of global variable '" + getName() + "'";
         LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg);
         return nullptr;
     }
-    
+
     llvm::Type* VarType = getTypeFromString(getType());
     if (!VarType) {
         return LogErrorV("Invalid type for global variable '" + getName() + "'");
     }
-    
+
     // Create global variable with zero initializer
     Constant* InitVal = nullptr;
-    
+
     if (VarType->isIntegerTy(32)) {
         InitVal = ConstantInt::get(VarType, 0);
     } else if (VarType->isFloatTy()) {
@@ -4365,7 +4365,7 @@ Value* GlobVarDeclAST::codegen() {
     } else {
         return LogErrorV("Unsupported type for global variable '" + getName() + "'");
     }
-    
+
     GlobalVariable* GV = new GlobalVariable(
         *TheModule,
         VarType,
@@ -4374,10 +4374,10 @@ Value* GlobVarDeclAST::codegen() {
         InitVal,
         getName()
     );
-    
+
     GlobalValues[getName()] = GV;
     registerVariable(getName(), getType(), true);  // Register in symbol table
-    
+
     DEBUG_CODEGEN("  Global variable created successfully");
     return GV;
 }
@@ -4712,7 +4712,7 @@ Value* ArrayAssignmentExprAST::codegen() {
 int main(int argc, char **argv) {
     initDebugLevel(argc, argv);
     ShowCompilationProgress();
-    
+
     std::string inputFile;
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -4725,7 +4725,7 @@ int main(int argc, char **argv) {
             break;
         }
     }
-    
+
     if (inputFile.empty()) {
         std::cout << "Usage: ./mccomp [options] InputFile\n";
         std::cout << "Options:\n";
@@ -4733,7 +4733,7 @@ int main(int argc, char **argv) {
         std::cout << "\nOr set MCCOMP_DEBUG environment variable\n";
         return 1;
     }
-    
+
     DEBUG_USER("Opening file: " + inputFile);
     pFile = fopen(inputFile.c_str(), "r");
     if (pFile == NULL) {
@@ -4743,10 +4743,10 @@ int main(int argc, char **argv) {
 
     lineNo = 1;
     columnNo = 1;
-    
+
     DEBUG_USER("Starting lexical analysis...");
     getNextToken();
-    
+
     if (CurrentDebugLevel < DebugLevel::PARSER) {
         fprintf(stderr, "Lexer Finished\n");
     }
@@ -4756,21 +4756,21 @@ int main(int argc, char **argv) {
 
     DEBUG_USER("Starting parsing...");
     parser();
-    
+
     if (HasErrors) {
         PrintAllErrors();
         fclose(pFile);
         return 1;
     }
-    
+
     if (CurrentDebugLevel < DebugLevel::PARSER) {
         fprintf(stderr, "Parsing Finished\n");
     }
     ShowPhaseComplete("Parsing");
     DEBUG_USER("Starting code generation...");
-    
+
     printf("********************* FINAL IR (begin) ****************************\n");
-    
+
     auto Filename = "output.ll";
     std::error_code EC;
     raw_fd_ostream dest(Filename, EC, sys::fs::OF_None);
@@ -4779,17 +4779,17 @@ int main(int argc, char **argv) {
         errs() << "Could not open file: " << EC.message();
         return 1;
     }
-    
+
     TheModule->print(dest, nullptr);
     printf("********************* FINAL IR (end) ******************************\n");
 
     fclose(pFile);
-    
+
     ShowPhaseComplete("Code generation");
-    
-    fprintf(stderr, "\n%s%s✓ Compilation Successful!%s\n", 
+
+    fprintf(stderr, "\n%s%s✓ Compilation Successful!%s\n",
             COLOR_BOLD.c_str(), COLOR_GREEN.c_str(), COLOR_RESET.c_str());
     fprintf(stderr, "Output: output.ll\n\n");
-    
+
     return 0;
 }
