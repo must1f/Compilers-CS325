@@ -44,7 +44,11 @@ static std::map<std::string, GlobalVariable*> GlobalValues;
 static std::map<std::string, std::string> VariableTypes;
 static Function *CurrentFunction = nullptr;
 
-// TOKEN class is used to keep track of information about a token
+
+// ============================================================================
+// TOKEN AND LEXER
+// ============================================================================
+
 class TOKEN {
 public:
   TOKEN() = default;
@@ -58,7 +62,6 @@ public:
   const bool getBoolVal() const;
 };
 
-// ANSI color codes for better readability
 #define USE_COLORS 1
 
 #if USE_COLORS
@@ -81,9 +84,10 @@ public:
   #define COLOR_BOLD    std::string("")
 #endif
 
-//===----------------------------------------------------------------------===//
-// Debug Infrastructure
-//===----------------------------------------------------------------------===//
+
+// ============================================================================
+// DEBUG INFRASTRUCTURE
+// ============================================================================
 
 enum class DebugLevel {
     NONE = 0,
@@ -215,10 +219,6 @@ static void ShowPhaseComplete(const std::string& phase) {
     }
 }
 
-//===----------------------------------------------------------------------===//
-// Error Reporting Infrastructure
-//===----------------------------------------------------------------------===//
-
 enum class ErrorType {
     LEXICAL,
     SYNTAX,
@@ -314,10 +314,6 @@ static void PrintAllErrors() {
     }
 }
 
-//===----------------------------------------------------------------------===//
-// Type Helper Functions
-//===----------------------------------------------------------------------===//
-
 static std::string getTypeName(Type* T) {
     if (!T) return "unknown";
     
@@ -360,13 +356,8 @@ struct TypeInfo {
         : typeName(name), isGlobal(global), line(l), column(c) {}
 };
 
-
-
 static std::map<std::string, TypeInfo> SymbolTypeTable;
 
-/// TypeInfo - Structure to hold type information
-
-/// getTypeInfo - Get type information for a variable
 static TypeInfo* getTypeInfo(const std::string& varName) {
     auto it = SymbolTypeTable.find(varName);
     if (it != SymbolTypeTable.end()) {
@@ -438,31 +429,22 @@ static void DUMP_SYMBOL_TABLE() {
     }
 }
 
-//===----------------------------------------------------------------------===//
-// AST Display Infrastructure
-//===----------------------------------------------------------------------===//
-
 namespace ASTPrint {
-  // Global indentation level for tree printing
   static int indentLevel = 0;
   
-  // Generate indentation string
   static std::string indent() {
     return std::string(indentLevel * 2, ' ');
   }
   
-  // Tree drawing characters
   static const char* BRANCH = "├─ ";
   static const char* LAST_BRANCH = "└─ ";
   static const char* VERTICAL = "│  ";
   static const char* SPACE = "   ";
   
-  // Helper to print with tree structure
   static std::string treePrefix(bool isLast) {
     return isLast ? LAST_BRANCH : BRANCH;
   }
   
-  // Helper to continue tree lines
   static std::string treeContinue(bool isLast) {
     return isLast ? SPACE : VERTICAL;
   }
@@ -470,17 +452,12 @@ namespace ASTPrint {
 
 FILE *pFile;
 
-//===----------------------------------------------------------------------===//
-// Lexer
-//===----------------------------------------------------------------------===//
-
 // The lexer returns one of these for known things.
 enum TOKEN_TYPE {
 
   IDENT = -1,        // [a-zA-Z_][a-zA-Z_0-9]*
   ASSIGN = int('='), // '='
 
-  // delimiters
   LBRA = int('{'),  // left brace
   RBRA = int('}'),  // right brace
   LPAR = int('('),  // left parenthesis
@@ -490,31 +467,24 @@ enum TOKEN_TYPE {
   SC = int(';'),    // semicolon
   COMMA = int(','), // comma
 
-  // types
   INT_TOK = -2,   // "int"
   VOID_TOK = -3,  // "void"
   FLOAT_TOK = -4, // "float"
   BOOL_TOK = -5,  // "bool"
 
-  // keywords
   EXTERN = -6,  // "extern"
   IF = -7,      // "if"
   ELSE = -8,    // "else"
   WHILE = -9,   // "while"
   RETURN = -10, // "return"
-  // TRUE   = -12,     // "true"
-  // FALSE   = -13,     // "false"
 
-  // literals
   INT_LIT = -14,   // [0-9]+
   FLOAT_LIT = -15, // [0-9]+.[0-9]+
   BOOL_LIT = -16,  // "true" or "false" key words
 
-  // logical operators
   AND = -17, // "&&"
   OR = -18,  // "||"
 
-  // operators
   PLUS = int('+'),    // addition or unary plus
   MINUS = int('-'),   // substraction or unary negative
   ASTERIX = int('*'), // multiplication
@@ -522,7 +492,6 @@ enum TOKEN_TYPE {
   MOD = int('%'),     // modular
   NOT = int('!'),     // unary negation
 
-  // comparison operators
   EQ = -19,      // equal
   NE = -20,      // not equal
   LE = -21,      // less than or equal to
@@ -530,14 +499,10 @@ enum TOKEN_TYPE {
   GE = -23,      // greater than or equal to
   GT = int('>'), // greater than
 
-  // special tokens
   EOF_TOK = 0, // signal end of file
 
-  // invalid
   INVALID = -100 // signal invalid token
 };
-
-
 
 static std::string globalLexeme;
 static int lineNo, columnNo;
@@ -588,14 +553,11 @@ static TOKEN returnTok(std::string lexVal, int tok_type) {
 }
 
 // Read file line by line -- or look for \n and if found add 1 to line number
-// and reset column number to 0
-/// gettok - Return the next token from standard input.
 static TOKEN gettok() {
 
   static int LastChar = ' ';
   static int NextChar = ' ';
 
-  // Skip any whitespace.
   while (isspace(LastChar)) {
     if (LastChar == '\n' || LastChar == '\r') {
       lineNo++;
@@ -636,11 +598,9 @@ static TOKEN gettok() {
     if (globalLexeme == "return")
       return returnTok("return", RETURN);
     if (globalLexeme == "true") {
-      //   BoolVal = true;
       return returnTok("true", BOOL_LIT);
     }
     if (globalLexeme == "false") {
-      //   BoolVal = false;
       return returnTok("false", BOOL_LIT);
     }
     return returnTok(globalLexeme.c_str(), IDENT);
@@ -700,7 +660,6 @@ static TOKEN gettok() {
         columnNo++;
       } while (isdigit(LastChar));
 
-      //   FloatVal = strtof(NumStr.c_str(), nullptr);
       return returnTok(NumStr, FLOAT_LIT);
     } else {
       do { // Start of Number: [0-9]+
@@ -716,10 +675,8 @@ static TOKEN gettok() {
           columnNo++;
         } while (isdigit(LastChar));
 
-        // FloatVal = strtof(NumStr.c_str(), nullptr);
         return returnTok(NumStr, FLOAT_LIT);
       } else { // Integer : [0-9]+
-        // IntVal = strtod(NumStr.c_str(), nullptr);
         return returnTok(NumStr, INT_LIT);
       }
     }
@@ -806,7 +763,6 @@ static TOKEN gettok() {
       return returnTok("/", DIV);
   }
 
-  // Check for end of file.  Don't eat the EOF.
   if (LastChar == EOF) {
     columnNo++;
     return returnTok("0", EOF_TOK);
@@ -820,13 +776,6 @@ static TOKEN gettok() {
   return returnTok(s, int(ThisChar));
 }
 
-//===----------------------------------------------------------------------===//
-// Parser
-//===----------------------------------------------------------------------===//
-
-/// CurTok/getNextToken - Provide a simple token buffer.  CurTok is the current
-/// token the parser is looking at.  getNextToken reads another token from the
-/// lexer and updates CurTok with its results.
 static TOKEN CurTok;
 static std::deque<TOKEN> tok_buffer;
 
@@ -844,7 +793,6 @@ static TOKEN getNextToken() {
 static void putBackToken(TOKEN tok) { tok_buffer.push_front(tok); }
 
 static TOKEN peekToken(int offset = 0) {
-  // Ensure we have enough tokens in the buffer
   while (tok_buffer.size() <= static_cast<size_t>(offset)) {
     tok_buffer.push_back(gettok());
   }
@@ -855,7 +803,11 @@ static TOKEN peekNextToken() {
   return peekToken(0);
 }
 
-/// ASTnode - Base class for all AST nodes.
+
+// ============================================================================
+// AST NODE CLASSES
+// ============================================================================
+
 class ASTnode {
 
 public:
@@ -865,7 +817,6 @@ public:
   virtual bool isArrayAccess() const { return false; }
 };
 
-/// IntASTnode - Class for integer literals like 1, 2, 10,
 class IntASTnode : public ASTnode {
   int Val;
   TOKEN Tok;
@@ -885,7 +836,6 @@ public:
   }
 };
 
-/// BoolASTnode - Class for boolean literals true and false,
 class BoolASTnode : public ASTnode {
   bool Bool;
   TOKEN Tok;
@@ -904,7 +854,6 @@ public:
   }
 };
 
-/// FloatASTnode - Node class for floating point literals like "1.0".
 class FloatASTnode : public ASTnode {
   double Val;
   TOKEN Tok;
@@ -923,8 +872,6 @@ public:
   }
 };
 
-/// VariableASTnode - Class for referencing a variable (i.e. identifier), like
-/// "a".
 enum IDENT_TYPE { IDENTIFIER = 0 };
 class VariableASTnode : public ASTnode {
 protected:
@@ -947,7 +894,6 @@ public:
   }
 };
 
-/// ParamAST - Class for a parameter declaration
 class ParamAST {
   std::string Name;
   std::string Type;
@@ -959,7 +905,6 @@ public:
   const std::string &getType() const { return Type; }
 };
 
-/// DeclAST - Base class for declarations, variables and functions
 class DeclAST : public ASTnode {
 
 public:
@@ -969,7 +914,6 @@ public:
   virtual bool isArray() const { return false; }
 };
 
-/// VarDeclAST - Class for a variable declaration
 class VarDeclAST : public DeclAST {
   std::unique_ptr<VariableASTnode> Var;
   std::string Type;
@@ -987,7 +931,6 @@ public:
   }
 };
 
-/// GlobVarDeclAST - Class for a Global variable declaration
 class GlobVarDeclAST : public DeclAST {
   std::unique_ptr<VariableASTnode> Var;
   std::string Type;
@@ -1007,7 +950,6 @@ public:
   }
 };
 
-/// ArrayDeclAST - Class for array declarations (1D, 2D, 3D)
 class ArrayDeclAST : public DeclAST {
   std::string Name;
   std::string Type;
@@ -1034,7 +976,6 @@ public:
               std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " +
               std::string(COLOR_BOLD) + Name + std::string(COLOR_RESET);
 
-    // Add dimension info
     for (size_t i = 0; i < Dimensions.size(); i++) {
       result += "[" + std::to_string(Dimensions[i]) + "]";
     }
@@ -1043,7 +984,6 @@ public:
   }
 };
 
-/// ArrayAccessAST - Class for array access expressions (arr[i], arr[i][j], arr[i][j][k])
 class ArrayAccessAST : public ASTnode {
   std::string Name;
   std::vector<std::unique_ptr<ASTnode>> Indices; // Stores 1-3 index expressions
@@ -1075,7 +1015,6 @@ public:
   }
 };
 
-/// FunctionPrototypeAST - Class for a function declaration's signature
 class FunctionPrototypeAST {
   std::string Name;
   std::string Type;
@@ -1136,7 +1075,6 @@ public:
   const std::string &getType();
 };
 
-/// BlockAST - Class for a block with declarations followed by statements
 class BlockAST : public ASTnode {
   std::vector<std::unique_ptr<DeclAST>> LocalDecls; // vector of local decls (variables and arrays)
   std::vector<std::unique_ptr<ASTnode>> Stmts;         // vector of statements
@@ -1151,7 +1089,6 @@ public:
   virtual std::string to_string() const override {
     std::string result = std::string(COLOR_CYAN) + "Block" + std::string(COLOR_RESET) + "\n";
     
-    // Print local declarations
     if (!LocalDecls.empty()) {
       result += ASTPrint::indent() + ASTPrint::BRANCH;
       result += std::string(COLOR_BLUE) + "LocalDecls (" + std::to_string(LocalDecls.size()) + 
@@ -1167,7 +1104,6 @@ public:
       ASTPrint::indentLevel--;
     }
     
-    // Print statements
     if (!Stmts.empty()) {
       if (!LocalDecls.empty()) result += "\n";
       
@@ -1202,7 +1138,6 @@ public:
   }
 };
 
-/// ArrayAssignmentExprAST - Class for array assignment expressions (arr[i][j] = expr)
 class ArrayAssignmentExprAST : public ASTnode {
   std::unique_ptr<ArrayAccessAST> LHS; // The array access on left-hand side
   std::unique_ptr<ASTnode> RHS;        // The right-hand side expression
@@ -1245,7 +1180,6 @@ public:
   }
 };
 
-/// FunctionDeclAST - This class represents a function definition itself.
 class FunctionDeclAST : public DeclAST {
   std::unique_ptr<FunctionPrototypeAST> Proto;
   std::unique_ptr<ASTnode> Block;
@@ -1284,7 +1218,6 @@ public:
   }
 };
 
-/// IfExprAST - Expression class for if/then/else.
 class IfExprAST : public ASTnode {
   std::unique_ptr<ASTnode> Cond, Then, Else;
 
@@ -1300,7 +1233,6 @@ public:
     
     ASTPrint::indentLevel++;
     
-    // Condition
     result += ASTPrint::indent() + ASTPrint::BRANCH;
     result += std::string(COLOR_BLUE) + "Condition: " + std::string(COLOR_RESET);
     if (Cond) {
@@ -1318,7 +1250,6 @@ public:
     }
     result += "\n";
     
-    // Then block
     bool hasElse = (Else != nullptr);
     result += ASTPrint::indent() + (hasElse ? ASTPrint::BRANCH : ASTPrint::LAST_BRANCH);
     result += std::string(COLOR_BLUE) + "Then: " + std::string(COLOR_RESET);
@@ -1336,7 +1267,6 @@ public:
       result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
     }
     
-    // Else block (if present)
     if (hasElse) {
       result += "\n" + ASTPrint::indent() + ASTPrint::LAST_BRANCH;
       result += std::string(COLOR_BLUE) + "Else: " + std::string(COLOR_RESET);
@@ -1358,7 +1288,6 @@ public:
 
 };
 
-/// WhileExprAST - Expression class for while.
 class WhileExprAST : public ASTnode {
   std::unique_ptr<ASTnode> Cond, Body;
 
@@ -1371,7 +1300,6 @@ public:
   virtual std::string to_string() const override {
     std::string result = std::string(COLOR_MAGENTA) + "WhileStmt" + std::string(COLOR_RESET) + "\n";
     
-    // Condition
     result += ASTPrint::indent() + ASTPrint::BRANCH;
     result += std::string(COLOR_BLUE) + "Condition:" + std::string(COLOR_RESET) + "\n";
     ASTPrint::indentLevel++;
@@ -1380,7 +1308,6 @@ public:
     ASTPrint::indentLevel--;
     result += "\n";
     
-    // Body
     result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
     result += std::string(COLOR_BLUE) + "Body:" + std::string(COLOR_RESET) + "\n";
     ASTPrint::indentLevel++;
@@ -1393,7 +1320,6 @@ public:
 
 };
 
-/// ReturnAST - Class for a return value
 class ReturnAST : public ASTnode {
   std::unique_ptr<ASTnode> Val;
 
@@ -1431,7 +1357,6 @@ public:
 
 };
 
-/// ArgsAST - Class for a function argumetn in a function call
 class ArgsAST : public ASTnode {
   std::string Callee;
   std::vector<std::unique_ptr<ASTnode>> ArgsList;
@@ -1441,10 +1366,6 @@ public:
       : Callee(Callee), ArgsList(std::move(list)) {}
 
 };
-
-//===----------------------------------------------------------------------===//
-// Enhanced Error Logging Functions
-//===----------------------------------------------------------------------===//
 
 static std::unique_ptr<ASTnode> LogError(TOKEN tok, const char *Str) {
     LogCompilerError(ErrorType::SYNTAX, Str, tok.lineNo, tok.columnNo, 
@@ -1493,11 +1414,6 @@ static Function* LogErrorF(const char *Str) {
     return nullptr;
 }
 
-
-//===----------------------------------------------------------------------===//
-// AST Printing Helper
-//===----------------------------------------------------------------------===//
-
 static void printAST(const std::unique_ptr<ASTnode>& node, const std::string& label) {
   if (!node) {
     fprintf(stderr, "\n%s%s=== %s ===%s\n", 
@@ -1518,7 +1434,6 @@ static void printAST(const std::unique_ptr<ASTnode>& node, const std::string& la
   fprintf(stderr, "%s\n\n", node->to_string().c_str());
 }
 
-/// BinaryExprAST - Expression class for binary operators
 class BinaryExprAST : public ASTnode {
   std::string Op;
   std::unique_ptr<ASTnode> LHS, RHS;
@@ -1539,7 +1454,6 @@ public:
     
     ASTPrint::indentLevel++;
     
-    // Print left operand
     result += ASTPrint::indent() + ASTPrint::BRANCH;
     result += std::string(COLOR_BLUE) + "LHS: " + std::string(COLOR_RESET);
     if (LHS) {
@@ -1557,7 +1471,6 @@ public:
     }
     result += "\n";
     
-    // Print right operand
     result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
     result += std::string(COLOR_BLUE) + "RHS: " + std::string(COLOR_RESET);
     if (RHS) {
@@ -1580,7 +1493,6 @@ public:
   }
 };
 
-/// UnaryExprAST - Expression class for unary operators
 class UnaryExprAST : public ASTnode {
   std::string Op; 
   std::unique_ptr<ASTnode> Operand;
@@ -1617,7 +1529,6 @@ public:
   }
 };
 
-/// CallExprAST - Expression class for function calls
 class CallExprAST : public ASTnode {
   std::string Callee;  
   std::vector<std::unique_ptr<ASTnode>> Args;  
@@ -1677,8 +1588,6 @@ public:
 }
 };
 
-
-/// AssignmentExprAST - Expression class for assignments
 class AssignmentExprAST : public ASTnode {
   std::string VarName;  
   std::unique_ptr<ASTnode> RHS;  
@@ -1725,12 +1634,12 @@ public:
 }
 };
 
-
-
-
-//===----------------------------------------------------------------------===//
 // Recursive Descent - Function call for each production
-//===----------------------------------------------------------------------===//
+
+
+// ============================================================================
+// PARSER FUNCTIONS
+// ============================================================================
 
 static std::unique_ptr<ASTnode> ParseDecl();
 static std::unique_ptr<ASTnode> ParseStmt();
@@ -1740,29 +1649,24 @@ static std::unique_ptr<ParamAST> ParseParam();
 static std::unique_ptr<DeclAST> ParseLocalDecl();
 static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime();
 
-// element ::= FLOAT_LIT
 static std::unique_ptr<ASTnode> ParseFloatNumberExpr() {
   auto Result = std::make_unique<FloatASTnode>(CurTok, CurTok.getFloatVal());
   getNextToken(); // consume the number
   return std::move(Result);
 }
 
-// element ::= INT_LIT
 static std::unique_ptr<ASTnode> ParseIntNumberExpr() {
   auto Result = std::make_unique<IntASTnode>(CurTok, CurTok.getIntVal());
   getNextToken(); // consume the number
   return std::move(Result);
 }
 
-// element ::= BOOL_LIT
 static std::unique_ptr<ASTnode> ParseBoolExpr() {
   auto Result = std::make_unique<BoolASTnode>(CurTok, CurTok.getBoolVal());
   getNextToken(); // consume the number
   return std::move(Result);
 }
 
-// param_list_prime ::= "," param param_list_prime
-//                   |  ε
 static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
   std::vector<std::unique_ptr<ParamAST>> param_list;
 
@@ -1779,8 +1683,6 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
       }
     }
   } else if (CurTok.type == RPAR) { // FOLLOW(param_list_prime)
-    // expand by param_list_prime ::= ε
-    // do nothing
   } else {
     LogError(CurTok, "expected ',' or ')' in list of parameter declarations");
   }
@@ -1788,8 +1690,6 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
   return param_list;
 }
 
-
-// param ::= var_type IDENT ["[" INT_LIT "]"]*
 static std::unique_ptr<ParamAST> ParseParam() {
   std::string Type = CurTok.lexeme; // keep track of the type of the param
   getNextToken();                   // eat the type token
@@ -1799,7 +1699,6 @@ static std::unique_ptr<ParamAST> ParseParam() {
     getNextToken(); // eat "IDENT"
 
     // Check for array parameter syntax: int a[10], int arr[10][5], etc.
-    // In C/C++, array parameters decay to pointers
     std::vector<int> dimensions;
     while (CurTok.type == LBOX) {
       getNextToken(); // eat '['
@@ -1818,7 +1717,6 @@ static std::unique_ptr<ParamAST> ParseParam() {
     }
 
     // For array parameters, convert to pointer type representation
-    // int a[10] -> pointer to int (stored as "int*")
     // int arr[10][5] -> pointer to array of 5 ints (stored as "int*[5]")
     if (!dimensions.empty()) {
       std::string PtrType = Type + "*";
@@ -1838,7 +1736,6 @@ static std::unique_ptr<ParamAST> ParseParam() {
   return nullptr;
 }
 
-// param_list ::= param param_list_prime
 static std::vector<std::unique_ptr<ParamAST>> ParseParamList() {
   std::vector<std::unique_ptr<ParamAST>> param_list;
 
@@ -1854,8 +1751,6 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamList() {
   return param_list;
 }
 
-// params ::= param_list
-//         |  ε
 static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
   std::vector<std::unique_ptr<ParamAST>> param_list;
 
@@ -1871,16 +1766,12 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
     }
 
   } else if (CurTok.type == VOID_TOK) { // FIRST("void")
-    // void
-    // check that the next token is a )
     getNextToken(); // eat 'void'
     if (CurTok.type != RPAR) {
       LogError(CurTok, "expected ')', after 'void' in \
        end of function declaration");
     }
   } else if (CurTok.type == RPAR) { // FOLLOW(params)
-    // expand by params ::= ε
-    // do nothing
   } else {
     LogError(
         CurTok,
@@ -1891,11 +1782,6 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
   return param_list;
 }
 
-//===----------------------------------------------------------------------===//
-// Array Parsing Functions
-//===----------------------------------------------------------------------===//
-
-// array_dims_cont2 ::= "[" INT_LIT "]" | ε
 static bool ParseArrayDimsCont2(std::vector<int> &dimensions) {
   if (CurTok.type == LBOX) {
     getNextToken(); // eat '['
@@ -1920,7 +1806,6 @@ static bool ParseArrayDimsCont2(std::vector<int> &dimensions) {
     }
     getNextToken(); // eat ']'
 
-    // Check for 4D arrays (not allowed)
     if (CurTok.type == LBOX) {
       LogError(CurTok, "arrays with more than 3 dimensions are not supported");
       return false;
@@ -1957,14 +1842,12 @@ static bool ParseArrayDimsCont(std::vector<int> &dimensions) {
     }
     getNextToken(); // eat ']'
 
-    // Parse optional third dimension
     return ParseArrayDimsCont2(dimensions);
   }
   // ε production - this is fine, we can have 1D arrays
   return true;
 }
 
-// array_access_cont2 ::= "[" expr "]" | ε
 static bool ParseArrayAccessCont2(std::vector<std::unique_ptr<ASTnode>> &indices) {
   if (CurTok.type == LBOX) {
     getNextToken(); // eat '['
@@ -1982,7 +1865,6 @@ static bool ParseArrayAccessCont2(std::vector<std::unique_ptr<ASTnode>> &indices
     }
     getNextToken(); // eat ']'
 
-    // Check for 4D array access (not allowed)
     if (CurTok.type == LBOX) {
       LogError(CurTok, "arrays with more than 3 dimensions are not supported");
       return false;
@@ -2012,14 +1894,12 @@ static bool ParseArrayAccessCont(std::vector<std::unique_ptr<ASTnode>> &indices)
     }
     getNextToken(); // eat ']'
 
-    // Parse optional third dimension
     return ParseArrayAccessCont2(indices);
   }
   // ε production - this is fine, we can have 1D array access
   return true;
 }
 
-// array_access ::= "[" expr "]" array_access_cont
 static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &arrayName) {
   std::vector<std::unique_ptr<ASTnode>> indices;
 
@@ -2043,7 +1923,6 @@ static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &array
   }
   getNextToken(); // eat ']'
 
-  // Parse additional dimensions
   if (!ParseArrayAccessCont(indices)) {
     return nullptr;
   }
@@ -2051,51 +1930,23 @@ static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &array
   return std::make_unique<ArrayAccessAST>(arrayName, std::move(indices));
 }
 
-// TODO : Task 2 - Parser
-
-// args ::= arg_list
-//      |  ε
-
-// arg_list ::= arg_list "," expr
-//      | expr
-
-// rval ::= rval "||" rval
-//      | rval "&&" rval
-//      | rval "==" rval | rval "!=" rval
 //      | rval "<=" rval | rval "<" rval | rval ">=" rval | rval ">" rval
-//      | rval "+" rval | rval "-" rval
 //      | rval "*" rval | rval "/" rval | rval "%" rval
-//      | "-" rval | "!" rval
-//      | "(" expr ")"
-//      | IDENT | IDENT "(" args ")"
-//      | INT_LIT | FLOAT_LIT | BOOL_LIT
 
-
-// args ::= arg_list
-//      |  ε
-
-
-// Helper function to parse function calls
-// Called when we've seen "IDENT ("
 static std::unique_ptr<ASTnode> ParseFunctionCall(const std::string &callee, TOKEN tok) {
   // At this point, we've already consumed IDENT and '('
-  // Current token should be start of args or ')'
   
   std::vector<std::unique_ptr<ASTnode>> args;
   
-  // Check if there are no arguments
   if (CurTok.type == RPAR) {
-    // Empty argument list
     return std::make_unique<CallExprAST>(callee, std::move(args));
   }
   
-  // Parse first argument
   auto arg = ParseExper();
   if (!arg)
     return nullptr;
   args.push_back(std::move(arg));
   
-  // Parse remaining arguments (if any)
   while (CurTok.type == COMMA) {
     getNextToken(); // eat ','
     
@@ -2108,15 +1959,8 @@ static std::unique_ptr<ASTnode> ParseFunctionCall(const std::string &callee, TOK
   
   return std::make_unique<CallExprAST>(callee, std::move(args));
 }
-// primary_expr ::= "(" expr ")"
-//              | IDENT "(" args ")"
-//              | IDENT
-//              | INT_LIT
-//              | FLOAT_LIT
-//              | BOOL_LIT
 static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
   
-  // Case 1: Parenthesized expression
   if (CurTok.type == LPAR) {
     getNextToken(); // eat '('
     auto expr = ParseExper();
@@ -2136,7 +1980,6 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
     TOKEN idTok = CurTok;
     getNextToken(); // eat identifier
 
-    // Check for function call
     if (CurTok.type == LPAR) {
       getNextToken(); // eat '('
 
@@ -2151,7 +1994,6 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
       return call;
     }
 
-    // Check for array access
     if (CurTok.type == LBOX) {
       auto arrayAccess = ParseArrayAccess(idName);
       if (!arrayAccess)
@@ -2159,11 +2001,9 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
       return arrayAccess;
     }
 
-    // Just a variable reference
     return std::make_unique<VariableASTnode>(idTok, idName);
   }
   
-  // Case 3-5: Literals
   if (CurTok.type == INT_LIT)
     return ParseIntNumberExpr();
   
@@ -2176,15 +2016,8 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
   return LogError(CurTok, "expected expression");
 }
 
-
-
-
-// unary_expr ::= "-" unary_expr
-//            | "!" unary_expr
-//            | primary_expr
 static std::unique_ptr<ASTnode> ParseUnaryExpr() {
   
-  // Case 1: Unary minus
   if (CurTok.type == MINUS) {
     getNextToken(); // eat '-'
     auto operand = ParseUnaryExpr();
@@ -2194,7 +2027,6 @@ static std::unique_ptr<ASTnode> ParseUnaryExpr() {
     return std::make_unique<UnaryExprAST>("-", std::move(operand));
   }
   
-  // Case 2: Unary not
   if (CurTok.type == NOT) {
     getNextToken(); // eat '!'
     auto operand = ParseUnaryExpr(); 
@@ -2204,23 +2036,15 @@ static std::unique_ptr<ASTnode> ParseUnaryExpr() {
     return std::make_unique<UnaryExprAST>("!", std::move(operand));
   }
   
-  // Case 3: Primary expression (no unary operator)
   return ParsePrimaryExpr();
 }
 
-
-// mul_expr ::= unary_expr mul_expr_prime
 // mul_expr_prime ::= "*" unary_expr mul_expr_prime
-//                | "/" unary_expr mul_expr_prime
-//                | "%" unary_expr mul_expr_prime
-//                | ε
 static std::unique_ptr<ASTnode> ParseMulExpr() {
-  // Parse the left-hand side (a unary expression)
   auto LHS = ParseUnaryExpr();
   if (!LHS)
     return nullptr;
   
-  // Parse mul_expr_prime (handle *, /, % operators)
   while (CurTok.type == ASTERIX || CurTok.type == DIV || CurTok.type == MOD) {
     std::string op;
     
@@ -2233,7 +2057,6 @@ static std::unique_ptr<ASTnode> ParseMulExpr() {
     
     getNextToken(); // eat the operator
     
-    // Parse the right-hand side
     auto RHS = ParseUnaryExpr();
     if (!RHS)
       return nullptr;
@@ -2245,16 +2068,11 @@ static std::unique_ptr<ASTnode> ParseMulExpr() {
   return LHS;
 }
 
-// add_expr ::= mul_expr add_expr_prime
-// add_expr_prime ::= "+" mul_expr add_expr_prime
-//                | "-" mul_expr add_expr_prime
-//                | ε
 static std::unique_ptr<ASTnode> ParseAddExpr() {
   auto LHS = ParseMulExpr(); // Parse higher precedence first
   if (!LHS)
     return nullptr;
   
-  // Handle + and - operators
   while (CurTok.type == PLUS || CurTok.type == MINUS) {
     std::string op = (CurTok.type == PLUS) ? "+" : "-";
     getNextToken(); // eat operator
@@ -2269,18 +2087,11 @@ static std::unique_ptr<ASTnode> ParseAddExpr() {
   return LHS;
 }
 
-// rel_expr ::= add_expr rel_expr_prime
-// rel_expr_prime ::= "<=" add_expr rel_expr_prime
-//                | "<" add_expr rel_expr_prime
-//                | ">=" add_expr rel_expr_prime
-//                | ">" add_expr rel_expr_prime
-//                | ε
 static std::unique_ptr<ASTnode> ParseRelExpr() {
   auto LHS = ParseAddExpr();
   if (!LHS)
     return nullptr;
   
-  // Handle <, <=, >, >= operators
   while (CurTok.type == LT || CurTok.type == LE || 
          CurTok.type == GT || CurTok.type == GE) {
     std::string op;
@@ -2306,17 +2117,11 @@ static std::unique_ptr<ASTnode> ParseRelExpr() {
   return LHS;
 }
 
-
-// eq_expr ::= rel_expr eq_expr_prime
-// eq_expr_prime ::= "==" rel_expr eq_expr_prime
-//               | "!=" rel_expr eq_expr_prime
-//               | ε
 static std::unique_ptr<ASTnode> ParseEqExpr() {
   auto LHS = ParseRelExpr();
   if (!LHS)
     return nullptr;
   
-  // Handle == and != operators
   while (CurTok.type == EQ || CurTok.type == NE) {
     std::string op = (CurTok.type == EQ) ? "==" : "!=";
     getNextToken(); // eat operator
@@ -2331,16 +2136,11 @@ static std::unique_ptr<ASTnode> ParseEqExpr() {
   return LHS;
 }
 
-
-// and_expr ::= eq_expr and_expr_prime
-// and_expr_prime ::= "&&" eq_expr and_expr_prime
-//                | ε
 static std::unique_ptr<ASTnode> ParseAndExpr() {
   auto LHS = ParseEqExpr();
   if (!LHS)
     return nullptr;
   
-  // Handle && operator
   while (CurTok.type == AND) {
     getNextToken(); // eat '&&'
     
@@ -2354,16 +2154,11 @@ static std::unique_ptr<ASTnode> ParseAndExpr() {
   return LHS;
 }
 
-
-// or_expr ::= and_expr or_expr_prime
-// or_expr_prime ::= "||" and_expr or_expr_prime
-//               | ε
 static std::unique_ptr<ASTnode> ParseOrExpr() {
   auto LHS = ParseAndExpr();
   if (!LHS)
     return nullptr;
   
-  // Handle || operator
   while (CurTok.type == OR) {
     getNextToken(); // eat '||'
     
@@ -2377,18 +2172,6 @@ static std::unique_ptr<ASTnode> ParseOrExpr() {
   return LHS;
 }
 
-
-/// ParseExper - Parse an expression with LL(2) lookahead.
-///
-/// Grammar:
-///   expr ::= IDENT "=" expr
-///         |  or_expr
-///
-/// After parsing or_expr, check if result is an array access and next token is '='
-/// to handle array assignment.
-///
-/// This production requires LL(2) lookahead for simple variable assignment.
-/// Array assignments are detected after parsing the lvalue.
 static std::unique_ptr<ASTnode> ParseExper() {
     PARSER_ENTER("ParseExper", CurTok);
 
@@ -2440,14 +2223,10 @@ static std::unique_ptr<ASTnode> ParseExper() {
         return result;
     }
 
-    // Not an assignment, just return the expression
     PARSER_EXIT("ParseExper", true);
     return LHS;
 }
 
-
-// expr_stmt ::= expr ";"
-//            |  ";"
 static std::unique_ptr<ASTnode> ParseExperStmt() {
 
   if (CurTok.type == SC) { // empty statement
@@ -2468,12 +2247,9 @@ static std::unique_ptr<ASTnode> ParseExperStmt() {
   return nullptr;
 }
 
-// else_stmt  ::= "else" block
-//             |  ε
 static std::unique_ptr<ASTnode> ParseElseStmt() {
 
   if (CurTok.type == ELSE) { // FIRST(else_stmt)
-    // expand by else_stmt  ::= "else" "{" stmt "}"
     getNextToken(); // eat "else"
 
     if (!(CurTok.type == LBRA)) {
@@ -2492,8 +2268,6 @@ static std::unique_ptr<ASTnode> ParseElseStmt() {
              CurTok.type == IF || CurTok.type == ELSE ||
              CurTok.type == RETURN ||
              CurTok.type == RBRA) { // FOLLOW(else_stmt)
-    // expand by else_stmt  ::= ε
-    // return an empty statement
     return nullptr;
   } else
     LogError(CurTok, "expected 'else' or one of \
@@ -2503,12 +2277,10 @@ static std::unique_ptr<ASTnode> ParseElseStmt() {
   return nullptr;
 }
 
-// if_stmt ::= "if" "(" expr ")" block else_stmt
 static std::unique_ptr<ASTnode> ParseIfStmt() {
   getNextToken(); // eat the if.
   if (CurTok.type == LPAR) {
     getNextToken(); // eat (
-    // condition.
     auto Cond = ParseExper();
     if (!Cond)
       return nullptr;
@@ -2534,13 +2306,10 @@ static std::unique_ptr<ASTnode> ParseIfStmt() {
   return nullptr;
 }
 
-// return_stmt ::= "return" ";"
-//             |  "return" expr ";"
 static std::unique_ptr<ASTnode> ParseReturnStmt() {
   getNextToken(); // eat the return
   if (CurTok.type == SC) {
     getNextToken(); // eat the ;
-    // return a null value
     return std::make_unique<ReturnAST>(std::move(nullptr));
   } else if (CurTok.type == NOT || CurTok.type == MINUS ||
              CurTok.type == PLUS || CurTok.type == LPAR ||
@@ -2562,13 +2331,11 @@ static std::unique_ptr<ASTnode> ParseReturnStmt() {
   return nullptr;
 }
 
-// while_stmt ::= "while" "(" expr ")" stmt
 static std::unique_ptr<ASTnode> ParseWhileStmt() {
 
   getNextToken(); // eat the while.
   if (CurTok.type == LPAR) {
     getNextToken(); // eat (
-    // condition.
     auto Cond = ParseExper();
     if (!Cond)
       return nullptr;
@@ -2585,18 +2352,12 @@ static std::unique_ptr<ASTnode> ParseWhileStmt() {
     return LogError(CurTok, "expected (");
 }
 
-// stmt ::= expr_stmt
-//      |  block
-//      |  if_stmt
-//      |  while_stmt
-//      |  return_stmt
 static std::unique_ptr<ASTnode> ParseStmt() {
 
   if (CurTok.type == NOT || CurTok.type == MINUS || CurTok.type == PLUS ||
       CurTok.type == LPAR || CurTok.type == IDENT || CurTok.type == BOOL_LIT ||
       CurTok.type == INT_LIT || CurTok.type == FLOAT_LIT ||
       CurTok.type == SC) { // FIRST(expr_stmt)
-    // expand by stmt ::= expr_stmt
     auto expr_stmt = ParseExperStmt();
     fprintf(stderr, "Parsed an expression statement\n");
     return expr_stmt;
@@ -2626,16 +2387,12 @@ static std::unique_ptr<ASTnode> ParseStmt() {
     }
   }
   // else if(CurTok.type == RBRA) { // FOLLOW(stmt_list_prime)
-  //  expand by stmt_list_prime ::= ε
-  //  do nothing
-  //}
   else { // syntax error
     return LogError(CurTok, "expected BLA BLA\n");
   }
   return nullptr;
 }
 
-// stmt_list ::= stmt stmt_list_prime
 static std::vector<std::unique_ptr<ASTnode>> ParseStmtList() {
   std::vector<std::unique_ptr<ASTnode>> stmt_list; // vector of statements
   auto stmt = ParseStmt();
@@ -2649,8 +2406,6 @@ static std::vector<std::unique_ptr<ASTnode>> ParseStmtList() {
   return stmt_list;
 }
 
-// stmt_list_prime ::= stmt stmt_list_prime
-//                  |  ε
 static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime() {
   std::vector<std::unique_ptr<ASTnode>> stmt_list; // vector of statements
   if (CurTok.type == NOT || CurTok.type == MINUS || CurTok.type == PLUS ||
@@ -2658,7 +2413,6 @@ static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime() {
       CurTok.type == INT_LIT || CurTok.type == FLOAT_LIT || CurTok.type == SC ||
       CurTok.type == LBRA || CurTok.type == WHILE || CurTok.type == IF ||
       CurTok.type == ELSE || CurTok.type == RETURN) { // FIRST(stmt)
-    // expand by stmt_list ::= stmt stmt_list_prime
     auto stmt = ParseStmt();
     if (stmt) {
       stmt_list.push_back(std::move(stmt));
@@ -2669,15 +2423,11 @@ static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime() {
     }
 
   } else if (CurTok.type == RBRA) { // FOLLOW(stmt_list_prime)
-    // expand by stmt_list_prime ::= ε
-    // do nothing
   }
   return stmt_list; // note stmt_list can be empty as we can have empty blocks,
-                    // etc.
 }
 
 // local_decls_prime ::= local_decl local_decls_prime
-//                    |  ε
 static std::vector<std::unique_ptr<DeclAST>> ParseLocalDeclsPrime() {
   std::vector<std::unique_ptr<DeclAST>>
       local_decls_prime; // vector of local decls
@@ -2698,8 +2448,6 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDeclsPrime() {
              CurTok.type == BOOL_LIT || CurTok.type == SC ||
              CurTok.type == LBRA || CurTok.type == IF || CurTok.type == WHILE ||
              CurTok.type == RETURN) { // FOLLOW(local_decls_prime)
-    // expand by local_decls_prime ::=  ε
-    // do nothing;
   } else {
     LogError(
         CurTok,
@@ -2710,11 +2458,7 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDeclsPrime() {
   return local_decls_prime;
 }
 
-// local_decl ::= var_type IDENT local_decl_suffix
 // local_decl_suffix ::= "[" INT_LIT "]" array_dims_cont ";" | ";"
-// var_type ::= "int"
-//           |  "float"
-//           |  "bool"
 static std::unique_ptr<DeclAST> ParseLocalDecl() {
   TOKEN PrevTok;
   std::string Type;
@@ -2734,7 +2478,6 @@ static std::unique_ptr<DeclAST> ParseLocalDecl() {
 
       // Use LL(2) lookahead to distinguish between simple variable and array
       if (CurTok.type == SC) {
-        // Simple variable declaration: type IDENT;
         std::unique_ptr<DeclAST> local_decl = std::make_unique<VarDeclAST>(std::move(ident), Type);
         getNextToken(); // eat ';'
         fprintf(stderr, "Parsed a local variable declaration\n");
@@ -2743,7 +2486,6 @@ static std::unique_ptr<DeclAST> ParseLocalDecl() {
         // Array declaration: type IDENT[dim1][dim2]...[dimN];
         std::vector<int> dimensions;
 
-        // Parse first dimension
         getNextToken(); // eat '['
 
         if (CurTok.type != INT_LIT) {
@@ -2766,7 +2508,6 @@ static std::unique_ptr<DeclAST> ParseLocalDecl() {
         }
         getNextToken(); // eat ']'
 
-        // Parse additional dimensions
         if (!ParseArrayDimsCont(dimensions)) {
           return nullptr;
         }
@@ -2793,7 +2534,6 @@ static std::unique_ptr<DeclAST> ParseLocalDecl() {
   return nullptr;
 }
 
-// local_decls ::= local_decl local_decls_prime
 static std::vector<std::unique_ptr<DeclAST>> ParseLocalDecls() {
   std::vector<std::unique_ptr<DeclAST>> local_decls; // vector of local decls
 
@@ -2815,7 +2555,6 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDecls() {
              CurTok.type == FLOAT_LIT || CurTok.type == BOOL_LIT ||
              CurTok.type == COMMA || CurTok.type == LBRA || CurTok.type == IF ||
              CurTok.type == WHILE) { // FOLLOW(local_decls)
-                                     // do nothing
   } else {
     LogError(
         CurTok,
@@ -2826,8 +2565,6 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDecls() {
   return local_decls;
 }
 
-// parse block
-// block ::= "{" local_decls stmt_list "}"
 static std::unique_ptr<ASTnode> ParseBlock() {
   std::vector<std::unique_ptr<DeclAST>> local_decls; // vector of local decls (variables and arrays)
   std::vector<std::unique_ptr<ASTnode>> stmt_list;      // vector of statements
@@ -2849,8 +2586,6 @@ static std::unique_ptr<ASTnode> ParseBlock() {
                                     std::move(stmt_list));
 }
 
-// decl ::= var_decl
-//       |  fun_decl
 static std::unique_ptr<ASTnode> ParseDecl() {
   std::string IdName;
   std::vector<std::unique_ptr<ParamAST>> param_list;
@@ -2869,13 +2604,11 @@ static std::unique_ptr<ASTnode> ParseDecl() {
 
       // Use LL(2) lookahead to distinguish between simple variable, array, and function
       if (CurTok.type == SC) {
-        // Simple variable declaration: type IDENT;
         getNextToken(); // eat ;
 
         fprintf(stderr, "Parsed a variable declaration\n");
 
         if (PrevTok.type != VOID_TOK) {
-          // Declare as ASTnode pointer
           std::unique_ptr<ASTnode> globVar = std::make_unique<GlobVarDeclAST>(
               std::move(ident), PrevTok.lexeme);
 
@@ -2891,7 +2624,6 @@ static std::unique_ptr<ASTnode> ParseDecl() {
         // Array declaration: type IDENT[dim1][dim2]...[dimN];
         std::vector<int> dimensions;
 
-        // Parse first dimension
         getNextToken(); // eat '['
 
         if (CurTok.type != INT_LIT) {
@@ -2911,7 +2643,6 @@ static std::unique_ptr<ASTnode> ParseDecl() {
         }
         getNextToken(); // eat ']'
 
-        // Parse additional dimensions
         if (!ParseArrayDimsCont(dimensions)) {
           return nullptr;
         }
@@ -2940,7 +2671,6 @@ static std::unique_ptr<ASTnode> ParseDecl() {
 
         auto P =
             ParseParams(); // parse the parameters, returns a vector of params
-        // if (P.size() == 0) return nullptr;
         fprintf(stderr, "Parsed parameter list for function\n");
 
         if (CurTok.type != RPAR) // syntax error
@@ -2957,10 +2687,6 @@ static std::unique_ptr<ASTnode> ParseDecl() {
         else
           fprintf(stderr, "Parsed block of statements in function\n");
 
-        // now create a Function prototype
-        // create a Function body
-        // put these to together
-        // and return a std::unique_ptr<FunctionDeclAST>
         fprintf(stderr, "Parsed a function declaration\n");
 
         auto Proto = std::make_unique<FunctionPrototypeAST>(
@@ -2983,8 +2709,6 @@ static std::unique_ptr<ASTnode> ParseDecl() {
   return nullptr;
 }
 
-// decl_list_prime ::= decl decl_list_prime
-//                  |  ε
 static void ParseDeclListPrime() {
   if (CurTok.type == VOID_TOK || CurTok.type == INT_TOK ||
       CurTok.type == FLOAT_TOK || CurTok.type == BOOL_TOK) { // FIRST(decl)
@@ -2994,14 +2718,11 @@ static void ParseDeclListPrime() {
     }
     ParseDeclListPrime();
   } else if (CurTok.type == EOF_TOK) { // FOLLOW(decl_list_prime)
-    // expand by decl_list_prime ::= ε
-    // do nothing
   } else { // syntax error
     LogError(CurTok, "expected 'void', 'int', 'bool' or 'float' or EOF token");
   }
 }
 
-// decl_list ::= decl decl_list_prime
 static void ParseDeclList() {
   auto decl = ParseDecl();
   if (decl) {
@@ -3068,15 +2789,11 @@ static std::unique_ptr<FunctionPrototypeAST> ParseExtern() {
   return nullptr;
 }
 
-// extern_list_prime ::= extern extern_list_prime
-//                   |  ε
-
 static void ParseExternListPrime() {
   if (CurTok.type == EXTERN) { // FIRST(extern)
     if (auto Extern = ParseExtern()) {
       fprintf(stderr, "Parsed a top-level external function declaration -- 2\n");
       
-      // Generate code for external function declaration
       if (Function* ExternF = Extern->codegen()) {
           fprintf(stderr, "Generated code for external function: %s\n", 
                   Extern->getName().c_str());
@@ -3089,20 +2806,16 @@ static void ParseExternListPrime() {
   } else if (CurTok.type == VOID_TOK || CurTok.type == INT_TOK ||
              CurTok.type == FLOAT_TOK ||
              CurTok.type == BOOL_TOK) { // FOLLOW(extern_list_prime)
-    // expand by decl_list_prime ::= ε
-    // do nothing
   } else { // syntax error
     LogError(CurTok, "expected 'extern' or 'void', 'int', 'float', 'bool'");
   }
 }
 
-// extern_list ::= extern extern_list_prime
 static void ParseExternList() {
   auto Extern = ParseExtern();
   if (Extern) {
     fprintf(stderr, "Parsed a top-level external function declaration -- 1\n");
     
-    // Generate code for external function declaration
     if (Function* ExternF = Extern->codegen()) {
         fprintf(stderr, "Generated code for external function: %s\n", 
                 Extern->getName().c_str());
@@ -3116,9 +2829,6 @@ static void ParseExternList() {
   }
 }
 
-
-
-// program ::= extern_list decl_list
 static void parser() {
   if (CurTok.type == EOF_TOK)
     return;
@@ -3130,16 +2840,11 @@ static void parser() {
     return;
 }
 
-//===----------------------------------------------------------------------===//
-// Code Generation
-//===----------------------------------------------------------------------===//
 
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
 
-//===----------------------------------------------------------------------===//
-// Symbol Tables and Helper Functions
-//===----------------------------------------------------------------------===//
-
-/// getTypeFromString - Convert MiniC type string to LLVM Type*
 static Type* getTypeFromString(const std::string& typeStr) {
     if (typeStr == "int")
         return Type::getInt32Ty(TheContext);
@@ -3150,7 +2855,6 @@ static Type* getTypeFromString(const std::string& typeStr) {
     if (typeStr == "void")
         return Type::getVoidTy(TheContext);
 
-    // Handle pointer types (for array parameters)
     if (typeStr.find('*') != std::string::npos) {
         // In LLVM 21+ with opaque pointers, all pointers are just 'ptr' type
         // We use the context-based API instead of typed pointers
@@ -3161,8 +2865,6 @@ static Type* getTypeFromString(const std::string& typeStr) {
     return nullptr;
 }
 
-/// CreateEntryBlockAlloca - Create alloca in entry block of function
-/// From LLVM Tutorial Chapter 7
 static AllocaInst* CreateEntryBlockAlloca(Function *TheFunction,
                                           const std::string &VarName,
                                           Type* VarType) {
@@ -3171,9 +2873,6 @@ static AllocaInst* CreateEntryBlockAlloca(Function *TheFunction,
     return TmpB.CreateAlloca(VarType, nullptr, VarName);
 }
 
-/// getElementTypeFromParamType - Extract element type from array parameter type string
-/// For "int*" or "int*[10]" returns Type::getInt32Ty()
-/// For "float*" or "float*[10]" returns Type::getFloatTy()
 static Type* getElementTypeFromParamType(const std::string& paramTypeStr) {
     if (paramTypeStr.find("float") != std::string::npos) {
         return Type::getFloatTy(TheContext);
@@ -3182,13 +2881,9 @@ static Type* getElementTypeFromParamType(const std::string& paramTypeStr) {
     } else if (paramTypeStr.find("bool") != std::string::npos) {
         return Type::getInt1Ty(TheContext);
     }
-    // Default to int if unclear
     return Type::getInt32Ty(TheContext);
 }
 
-/// extractInnerDimensionFromParamType - Extract inner dimension from 2D array parameter
-/// For "float*[10]" returns 10, for "int*[5]" returns 5
-/// Returns -1 if no dimension found (1D array parameter)
 static int extractInnerDimensionFromParamType(const std::string& paramTypeStr) {
     size_t lbracket = paramTypeStr.find('[');
     size_t rbracket = paramTypeStr.find(']');
@@ -3204,9 +2899,6 @@ static int extractInnerDimensionFromParamType(const std::string& paramTypeStr) {
     return -1;
 }
 
-/// getArrayTypeForParam - Create the proper array type for a 2D array parameter
-/// For "float*[10]" returns [10 x float]
-/// For "int*[5]" returns [5 x i32]
 static Type* getArrayTypeForParam(const std::string& paramTypeStr) {
     Type* elementType = getElementTypeFromParamType(paramTypeStr);
     int innerDim = extractInnerDimensionFromParamType(paramTypeStr);
@@ -3218,33 +2910,28 @@ static Type* getArrayTypeForParam(const std::string& paramTypeStr) {
 }
 
 
-//===----------------------------------------------------------------------===//
-// Code Generation - AST Node Implementations
-//===----------------------------------------------------------------------===//
+// ============================================================================
+// CODE GENERATION
+// ============================================================================
 
-/// IntASTnode::codegen - Generate LLVM IR for integer literals
 Value* IntASTnode::codegen() {
     DEBUG_CODEGEN("Generating integer literal: " + std::to_string(Val));
     return ConstantInt::get(Type::getInt32Ty(TheContext), APInt(32, Val, true));
 }
 
-/// FloatASTnode::codegen - Generate LLVM IR for float literals
 Value* FloatASTnode::codegen() {
     DEBUG_CODEGEN("Generating float literal: " + std::to_string(Val));
     return ConstantFP::get(Type::getFloatTy(TheContext), APFloat((float)Val));
 }
 
-/// BoolASTnode::codegen - Generate LLVM IR for boolean literals
 Value* BoolASTnode::codegen() {
     DEBUG_CODEGEN("Generating boolean literal: " + std::string(Bool ? "true" : "false"));
     return ConstantInt::get(Type::getInt1Ty(TheContext), APInt(1, Bool ? 1 : 0, false));
 }
 
-/// checkVariableInScope - Check if variable is in scope and return its type
 static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1, int col = -1) {
     DEBUG_CODEGEN("Checking scope for variable: " + varName);
     
-    // Check local scope first
     if (NamedValues.find(varName) != NamedValues.end()) {
         TypeInfo* info = getTypeInfo(varName);
         if (info) {
@@ -3253,7 +2940,6 @@ static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1,
         }
     }
     
-    // Check global scope
     if (GlobalValues.find(varName) != GlobalValues.end()) {
         TypeInfo* info = getTypeInfo(varName);
         if (info) {
@@ -3262,7 +2948,6 @@ static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1,
         }
     }
     
-    // Variable not found
     DEBUG_CODEGEN("  ERROR: Variable not found in any scope");
     std::string msg = "Undefined variable '" + varName + "'";
     if (CurrentContext.currentFunction.empty()) {
@@ -3274,25 +2959,20 @@ static TypeInfo* checkVariableInScope(const std::string& varName, int line = -1,
     return nullptr;
 }
 
-/// VariableASTnode::codegen - Generate LLVM IR for variable references
 Value* VariableASTnode::codegen() {
     DEBUG_CODEGEN("Loading variable: " + Name);
     
-    // Check scope and get type information
     TypeInfo* typeInfo = checkVariableInScope(Name, Tok.lineNo, Tok.columnNo);
     if (!typeInfo) {
-        // Error already logged by checkVariableInScope
         DUMP_SYMBOL_TABLE();
         return nullptr;
     }
     
-    // Try local scope first
     AllocaInst* V = NamedValues[Name];
     if (V) {
         DEBUG_CODEGEN("  Found in local scope: " + getTypeName(V->getAllocatedType()));
         DEBUG_CODEGEN("  Type from symbol table: " + typeInfo->typeName);
         
-        // Verify type consistency
         Type* expectedType = getTypeFromString(typeInfo->typeName);
         if (V->getAllocatedType() != expectedType) {
             LogCompilerError(ErrorType::SEMANTIC_TYPE,
@@ -3304,13 +2984,11 @@ Value* VariableASTnode::codegen() {
         return Builder.CreateLoad(V->getAllocatedType(), V, Name.c_str());
     }
     
-    // Try global scope
     GlobalVariable* GV = GlobalValues[Name];
     if (GV) {
         DEBUG_CODEGEN("  Found in global scope: " + getTypeName(GV->getValueType()));
         DEBUG_CODEGEN("  Type from symbol table: " + typeInfo->typeName);
         
-        // Verify type consistency
         Type* expectedType = getTypeFromString(typeInfo->typeName);
         if (GV->getValueType() != expectedType) {
             LogCompilerError(ErrorType::SEMANTIC_TYPE,
@@ -3328,20 +3006,6 @@ Value* VariableASTnode::codegen() {
     return nullptr;
 }
 
-//===----------------------------------------------------------------------===//
-// Type Conversion Helpers
-//===----------------------------------------------------------------------===//
-
-//===----------------------------------------------------------------------===//
-// Enhanced Type System
-//===----------------------------------------------------------------------===//
-
-
-
-
-
-
-/// registerVariable - Register a variable in the symbol table with type info
 static void registerVariable(const std::string& varName, const std::string& typeName, 
                              bool isGlobal = false, int line = -1, int col = -1) {
     SymbolTypeTable[varName] = TypeInfo(typeName, isGlobal, line, col);
@@ -3349,9 +3013,6 @@ static void registerVariable(const std::string& varName, const std::string& type
                  "' (global: " + (isGlobal ? "yes" : "no") + ")");
 }
 
-
-
-/// checkFunctionExists - Check if function is declared
 static Function* checkFunctionExists(const std::string& funcName, int line = -1, int col = -1) {
     DEBUG_CODEGEN("Checking function: " + funcName);
     
@@ -3360,7 +3021,6 @@ static Function* checkFunctionExists(const std::string& funcName, int line = -1,
         DEBUG_CODEGEN("  ERROR: Function not found");
         std::string msg = "Call to undefined function '" + funcName + "'";
         
-        // Provide suggestions for similar function names
         std::string suggestion;
         for (auto& Fn : TheModule->functions()) {
             std::string fnName = Fn.getName().str();
@@ -3378,13 +3038,11 @@ static Function* checkFunctionExists(const std::string& funcName, int line = -1,
     return F;
 }
 
-/// getValueType - Get the LLVM type of a Value
 static Type* getValueType(Value* V) {
     if (!V) return nullptr;
     return V->getType();
 }
 
-/// isNarrowingConversion - Check if conversion from From to To is narrowing
 static bool isNarrowingConversion(Type* From, Type* To) {
     if (!From || !To) return false;
     if (From == To) return false;
@@ -3401,30 +3059,24 @@ static bool isNarrowingConversion(Type* From, Type* To) {
     return false;
 }
 
-/// isWideningConversion - Check if conversion is widening (safe)
 static bool isWideningConversion(Type* From, Type* To) {
     if (!From || !To) return false;
     
-    // int to float is widening
     if (From->isIntegerTy(32) && To->isFloatTy())
         return true;
     
-    // bool to int is widening
     if (From->isIntegerTy(1) && To->isIntegerTy(32))
         return true;
     
-    // bool to float is widening (through int)
     if (From->isIntegerTy(1) && To->isFloatTy())
         return true;
     
-    // float to double is widening
     if (From->isFloatTy() && To->isDoubleTy())
         return true;
     
     return false;
 }
 
-/// castToType - Perform type conversions with proper checking
 static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true, 
                          const std::string& context = "") {
     if (!V || !DestTy) {
@@ -3439,7 +3091,6 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
     
     DEBUG_VERBOSE("  Type conversion needed: " + getTypeName(SrcTy) + " -> " + getTypeName(DestTy));
     
-    // Check for narrowing conversion
     if (!allowNarrowing && isNarrowingConversion(SrcTy, DestTy)) {
         std::string msg = "Narrowing conversion not allowed";
         if (!context.empty()) {
@@ -3450,21 +3101,16 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
         return nullptr;
     }
     
-    // Perform widening conversions
-    
-    // int to float (widening)
     if (SrcTy->isIntegerTy(32) && DestTy->isFloatTy()) {
         DEBUG_VERBOSE("  Converting int to float");
         return Builder.CreateSIToFP(V, DestTy, "itof");
     }
     
-    // bool to int (widening)
     if (SrcTy->isIntegerTy(1) && DestTy->isIntegerTy(32)) {
         DEBUG_VERBOSE("  Converting bool to int");
         return Builder.CreateZExt(V, DestTy, "btoi");
     }
     
-    // bool to float (widening through int)
     if (SrcTy->isIntegerTy(1) && DestTy->isFloatTy()) {
         DEBUG_VERBOSE("  Converting bool to float (via int)");
         Value* AsInt = Builder.CreateZExt(V, Type::getInt32Ty(TheContext), "btoi");
@@ -3477,34 +3123,28 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
         return Builder.CreateFPTrunc(V, DestTy, "fptrunc");
     }
     
-    // float to double conversion
     if (SrcTy->isFloatTy() && DestTy->isDoubleTy()) {
         DEBUG_VERBOSE("  Converting float to double");
         return Builder.CreateFPExt(V, DestTy, "fpext");
     }
     
-    // Narrowing conversions (only if allowed)
     if (allowNarrowing) {
-        // float to int (narrowing)
         if (SrcTy->isFloatTy() && DestTy->isIntegerTy(32)) {
             DEBUG_VERBOSE("  Converting float to int (narrowing - allowed)");
             return Builder.CreateFPToSI(V, DestTy, "ftoi");
         }
         
-        // int to bool (narrowing - used in conditionals)
         if (SrcTy->isIntegerTy(32) && DestTy->isIntegerTy(1)) {
             DEBUG_VERBOSE("  Converting int to bool (narrowing - allowed)");
             return Builder.CreateICmpNE(V, ConstantInt::get(SrcTy, 0), "tobool");
         }
         
-        // float/double to bool for conditionals
         if ((SrcTy->isFloatTy() || SrcTy->isDoubleTy()) && DestTy->isIntegerTy(1)) {
             DEBUG_VERBOSE("  Converting float/double to bool");
             return Builder.CreateFCmpONE(V, ConstantFP::get(SrcTy, 0.0), "tobool");
         }
     }
     
-    // Unsupported conversion
     std::string msg = "Cannot convert between types";
     if (!context.empty()) {
         msg += " in " + context;
@@ -3514,11 +3154,9 @@ static Value* castToType(Value* V, Type* DestTy, bool allowNarrowing = true,
     return nullptr;
 }
 
-/// checkTypeCompatibility - Check if two types are compatible for operations
 static bool checkTypeCompatibility(Type* T1, Type* T2, const std::string& operation) {
     if (!T1 || !T2) return false;
     
-    // Same types are always compatible
     if (T1 == T2) return true;
     
     // Numeric types are compatible with each other (with conversion)
@@ -3534,11 +3172,8 @@ static bool checkTypeCompatibility(Type* T1, Type* T2, const std::string& operat
     return false;
 }
 
-
 // Duplicate checkNarrowingConversion removed; use the earlier definition above.
 
-
-/// promoteTypes - Promote two values to common type for binary operations
 static void promoteTypes(Value*& L, Value*& R) {
     Type* LTy = L->getType();
     Type* RTy = R->getType();
@@ -3546,7 +3181,6 @@ static void promoteTypes(Value*& L, Value*& R) {
     if (LTy == RTy)
         return;
     
-    // **FIX: Normalize f64 to f32 first**
     if (LTy->isDoubleTy()) {
         L = Builder.CreateFPTrunc(L, Type::getFloatTy(TheContext), "fptrunc");
         LTy = L->getType();
@@ -3556,19 +3190,16 @@ static void promoteTypes(Value*& L, Value*& R) {
         RTy = R->getType();
     }
     
-    // Now promote to float if either is float
     if (LTy->isFloatTy() && RTy->isIntegerTy(32)) {
         R = Builder.CreateSIToFP(R, LTy, "itof");
     } else if (RTy->isFloatTy() && LTy->isIntegerTy(32)) {
         L = Builder.CreateSIToFP(L, RTy, "itof");
     }
-    // Promote bool to int if needed
     else if (LTy->isIntegerTy(32) && RTy->isIntegerTy(1)) {
         R = Builder.CreateZExt(R, LTy, "btoi");
     } else if (RTy->isIntegerTy(32) && LTy->isIntegerTy(1)) {
         L = Builder.CreateZExt(L, RTy, "btoi");
     }
-    // Promote bool to float through int
     else if (LTy->isFloatTy() && RTy->isIntegerTy(1)) {
         R = Builder.CreateZExt(R, Type::getInt32Ty(TheContext), "btoi");
         R = Builder.CreateSIToFP(R, LTy, "itof");
@@ -3578,7 +3209,6 @@ static void promoteTypes(Value*& L, Value*& R) {
     }
 }
 
-/// BinaryExprAST::codegen - Generate code for binary operators
 Value* BinaryExprAST::codegen() {
     DEBUG_CODEGEN("Generating binary expression: " + Op);
     
@@ -3773,7 +3403,6 @@ Value* BinaryExprAST::codegen() {
     return nullptr;
 }
 
-/// UnaryExprAST::codegen - Generate code for unary operators
 Value* UnaryExprAST::codegen() {
     DEBUG_CODEGEN("Generating unary expression: " + Op);
     
@@ -3815,7 +3444,6 @@ Value* UnaryExprAST::codegen() {
     return nullptr;
 }
 
-/// AssignmentExprAST::codegen - Generate code for assignments
 Value* AssignmentExprAST::codegen() {
     DEBUG_CODEGEN("Generating assignment to: " + VarName);
     
@@ -3879,14 +3507,11 @@ Value* AssignmentExprAST::codegen() {
     return Val;
 }
 
-/// CallExprAST::codegen - Generate code for function calls
 Value* CallExprAST::codegen() {
     DEBUG_CODEGEN("Generating function call: " + Callee);
     
-    // Check if function exists
     Function* CalleeF = checkFunctionExists(Callee);
     if (!CalleeF) {
-        // Error already logged
         return nullptr;
     }
     
@@ -3894,7 +3519,6 @@ Value* CallExprAST::codegen() {
     DEBUG_VERBOSE("  Expected args: " + std::to_string(CalleeF->arg_size()));
     DEBUG_VERBOSE("  Provided args: " + std::to_string(Args.size()));
     
-    // Check argument count
     if (CalleeF->arg_size() != Args.size()) {
         DEBUG_CODEGEN("  ERROR: Argument count mismatch");
         std::string msg = "Function '" + Callee + "' expects " + 
@@ -3920,9 +3544,7 @@ Value* CallExprAST::codegen() {
         DEBUG_VERBOSE("    Expected: " + getTypeName(ExpectedType));
         DEBUG_VERBOSE("    Actual: " + getTypeName(ActualType));
         
-        // Check type compatibility and convert if needed
         if (ActualType != ExpectedType) {
-            // Per spec: allow widening, disallow narrowing
             if (isNarrowingConversion(ActualType, ExpectedType)) {
                 std::string msg = "Narrowing conversion in argument " + std::to_string(Idx + 1) + 
                                 " of function '" + Callee + "'";
@@ -3935,7 +3557,6 @@ Value* CallExprAST::codegen() {
             ArgVal = castToType(ArgVal, ExpectedType, false, 
                                "function call argument " + std::to_string(Idx + 1));
             if (!ArgVal) {
-                // Error already logged
                 return nullptr;
             }
             DEBUG_VERBOSE("    Converted successfully");
@@ -3953,18 +3574,15 @@ Value* CallExprAST::codegen() {
         return Builder.CreateCall(CalleeF, ArgsV, "calltmp");
 }
 
-/// IfExprAST::codegen - Generate code for if/then/else
 Value* IfExprAST::codegen() {
     Value* CondV = Cond->codegen();
     if (!CondV)
         return nullptr;
     
-    // Convert condition to bool
     CondV = castToType(CondV, Type::getInt1Ty(TheContext));
     
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     
-    // Create blocks for then, else, and merge
     BasicBlock* ThenBB = BasicBlock::Create(TheContext, "then", TheFunction);
     BasicBlock* ElseBB = BasicBlock::Create(TheContext, "else");
     BasicBlock* MergeBB = BasicBlock::Create(TheContext, "ifcont");
@@ -3975,7 +3593,6 @@ Value* IfExprAST::codegen() {
         Builder.CreateCondBr(CondV, ThenBB, MergeBB);
     }
     
-    // Emit then block
     Builder.SetInsertPoint(ThenBB);
     Value* ThenV = Then->codegen();
     if (!ThenV)
@@ -3983,7 +3600,6 @@ Value* IfExprAST::codegen() {
     Builder.CreateBr(MergeBB);
     ThenBB = Builder.GetInsertBlock();
     
-    // Emit else block
     if (Else) {
         TheFunction->insert(TheFunction->end(), ElseBB);
         Builder.SetInsertPoint(ElseBB);
@@ -3994,61 +3610,50 @@ Value* IfExprAST::codegen() {
         ElseBB = Builder.GetInsertBlock();
     }
     
-    // Emit merge block
     TheFunction->insert(TheFunction->end(), MergeBB);
     Builder.SetInsertPoint(MergeBB);
     
     return Constant::getNullValue(Type::getInt32Ty(TheContext));
 }
 
-/// WhileExprAST::codegen - Generate code for while loops
 Value* WhileExprAST::codegen() {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     
-    // Create blocks for loop
     BasicBlock* LoopBB = BasicBlock::Create(TheContext, "loop", TheFunction);
     BasicBlock* BodyBB = BasicBlock::Create(TheContext, "body");
     BasicBlock* AfterBB = BasicBlock::Create(TheContext, "afterloop");
     
-    // Branch to loop header
     Builder.CreateBr(LoopBB);
     
-    // Emit loop header (condition check)
     Builder.SetInsertPoint(LoopBB);
     Value* CondV = Cond->codegen();
     if (!CondV)
         return nullptr;
     
-    // Convert condition to bool
     CondV = castToType(CondV, Type::getInt1Ty(TheContext));
     
     Builder.CreateCondBr(CondV, BodyBB, AfterBB);
     
-    // Emit loop body
     TheFunction->insert(TheFunction->end(), BodyBB);
     Builder.SetInsertPoint(BodyBB);
     Value* BodyV = Body->codegen();
     if (!BodyV)
         return nullptr;
     
-    // Branch back to loop header
     Builder.CreateBr(LoopBB);
     
-    // Emit after block
     TheFunction->insert(TheFunction->end(), AfterBB);
     Builder.SetInsertPoint(AfterBB);
     
     return Constant::getNullValue(Type::getInt32Ty(TheContext));
 }
 
-/// ReturnAST::codegen - Generate code for return statements
 Value* ReturnAST::codegen() {
     DEBUG_CODEGEN("Generating return statement");
     
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     Type* FuncRetType = TheFunction->getReturnType();
     
-    // Case 1: Void return
     if (!Val) {
         if (!FuncRetType->isVoidTy()) {
             DEBUG_CODEGEN("  ERROR: Non-void function must return a value");
@@ -4060,7 +3665,6 @@ Value* ReturnAST::codegen() {
         return Builder.CreateRetVoid();
     }
     
-    // Case 2: Value return
     if (FuncRetType->isVoidTy()) {
         DEBUG_CODEGEN("  ERROR: Void function cannot return a value");
         return LogErrorV("Void function '" + 
@@ -4086,7 +3690,6 @@ Value* ReturnAST::codegen() {
             return LogTypeError(msg, FuncRetType, RetType);
         }
         
-        // Widening conversion (ALLOWED per spec)
         DEBUG_VERBOSE("  Applying widening conversion");
         RetVal = castToType(RetVal, FuncRetType, /*allowNarrowing=*/false);
         if (!RetVal) {
@@ -4100,19 +3703,16 @@ Value* ReturnAST::codegen() {
     return Builder.CreateRet(RetVal);
 }
 
-/// BlockAST::codegen - Generate code for blocks
 Value* BlockAST::codegen() {
     std::map<std::string, AllocaInst*> OldBindings;
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     
-    // Generate code for local declarations
     for (auto& decl : LocalDecls) {
         const std::string& VarName = decl->getName();
         const std::string& TypeStr = decl->getType();
 
         DEBUG_CODEGEN("  Declaring local variable/array: " + VarName + " : " + TypeStr);
 
-        // Check if shadowing a global variable (allowed)
         if (GlobalValues.find(VarName) != GlobalValues.end()) {
             DEBUG_CODEGEN("    Shadowing global variable '" + VarName + "'");
         }
@@ -4123,15 +3723,12 @@ Value* BlockAST::codegen() {
             DEBUG_CODEGEN("    Shadowing local variable from outer scope");
         }
 
-        // Check if this is an array declaration
         if (decl->isArray()) {
-            // Array declaration - call its codegen method
             DEBUG_CODEGEN("    Processing as array declaration");
             if (!decl->codegen()) {
                 return nullptr;
             }
         } else {
-            // Simple variable declaration
             DEBUG_CODEGEN("    Processing as simple variable declaration");
             Type* VarType = getTypeFromString(TypeStr);
             if (!VarType) {
@@ -4142,7 +3739,6 @@ Value* BlockAST::codegen() {
 
             AllocaInst* Alloca = CreateEntryBlockAlloca(TheFunction, VarName, VarType);
 
-            // Initialize to zero
             if (VarType->isIntegerTy(32)) {
                 Builder.CreateStore(ConstantInt::get(VarType, 0), Alloca);
             } else if (VarType->isFloatTy()) {
@@ -4156,7 +3752,6 @@ Value* BlockAST::codegen() {
         }
     }
     
-    // Generate code for statements
     Value* LastVal = nullptr;
     for (auto& stmt : Stmts) {
         if (stmt) {  // Check if statement is not null (empty statement)
@@ -4167,12 +3762,10 @@ Value* BlockAST::codegen() {
         }
     }
     
-    // Restore old bindings
     for (auto& binding : OldBindings) {
         NamedValues[binding.first] = binding.second;
     }
     
-    // Remove variables that went out of scope
     for (auto& decl : LocalDecls) {
         if (OldBindings.find(decl->getName()) == OldBindings.end()) {
             NamedValues.erase(decl->getName());
@@ -4183,13 +3776,10 @@ Value* BlockAST::codegen() {
     return LastVal ? LastVal : Constant::getNullValue(Type::getInt32Ty(TheContext));
 }
 
-/// FunctionDeclAST::codegen - Generate code for function definitions
 Value* FunctionDeclAST::codegen() {
-    // Check if function already exists
     Function* TheFunction = TheModule->getFunction(Proto->getName());
     
     if (!TheFunction) {
-        // Create function type
         Type* RetType = getTypeFromString(Proto->getType());
         std::vector<Type*> ParamTypes;
         
@@ -4201,25 +3791,20 @@ Value* FunctionDeclAST::codegen() {
         TheFunction = Function::Create(FT, Function::ExternalLinkage, 
                                       Proto->getName(), TheModule.get());
         
-        // Set parameter names
         unsigned Idx = 0;
         for (auto& Arg : TheFunction->args()) {
             Arg.setName(Proto->getParams()[Idx++]->getName());
         }
     }
     
-    // Create entry block
     BasicBlock* BB = BasicBlock::Create(TheContext, "entry", TheFunction);
     Builder.SetInsertPoint(BB);
     
-    // Save old function
     Function* OldFunction = CurrentFunction;
     CurrentFunction = TheFunction;
     
-    // Clear variable scope
     NamedValues.clear();
     
-    // Create allocas for parameters
     unsigned Idx = 0;
     for (auto& Arg : TheFunction->args()) {
         std::string ArgName(Arg.getName());
@@ -4231,14 +3816,11 @@ Value* FunctionDeclAST::codegen() {
         registerVariable(ArgName, TypeStr, false);  // Register parameter in symbol table
     }
     
-    // Generate function body
     if (Value* RetVal = Block->codegen()) {
-        // Check if the last block has a terminator
         if (!Builder.GetInsertBlock()->getTerminator()) {
             if (TheFunction->getReturnType()->isVoidTy()) {
                 Builder.CreateRetVoid();
             } else {
-                // For non-void functions, return a default value
                 if (TheFunction->getReturnType()->isIntegerTy(32)) {
                     Builder.CreateRet(ConstantInt::get(TheFunction->getReturnType(), 0));
                 } else if (TheFunction->getReturnType()->isFloatTy()) {
@@ -4249,7 +3831,6 @@ Value* FunctionDeclAST::codegen() {
             }
         }
         
-        // Verify function
         verifyFunction(*TheFunction);
 
         for (auto& param : Proto->getParams()) {
@@ -4260,15 +3841,12 @@ Value* FunctionDeclAST::codegen() {
         return TheFunction;
     }
     
-    // Error - remove function
     TheFunction->eraseFromParent();
     CurrentFunction = OldFunction;
     return nullptr;
 }
 
-/// FunctionPrototypeAST::codegen - Generate code for function prototypes (extern declarations)
 Function* FunctionPrototypeAST::codegen() {
-    // Check if function already exists
     Function* TheFunction = TheModule->getFunction(getName());
     if (TheFunction) {
         return TheFunction;
@@ -4291,11 +3869,9 @@ Function* FunctionPrototypeAST::codegen() {
     
     FunctionType* FT = FunctionType::get(RetType, ParamTypes, false);
     
-    // Create function with external linkage
     TheFunction = Function::Create(FT, Function::ExternalLinkage, 
                                    getName(), TheModule.get());
     
-    // Set parameter names
     unsigned Idx = 0;
     for (auto& Arg : TheFunction->args()) {
         Arg.setName(getParams()[Idx++]->getName());
@@ -4304,12 +3880,9 @@ Function* FunctionPrototypeAST::codegen() {
     return TheFunction;
 }
 
-
-/// GlobVarDeclAST::codegen - Generate code for global variable declarations
 Value* GlobVarDeclAST::codegen() {
     DEBUG_CODEGEN("Generating global variable: " + getName());
     
-    // Check if variable already exists
     if (GlobalValues.find(getName()) != GlobalValues.end()) {
         std::string msg = "Redeclaration of global variable '" + getName() + "'";
         LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg);
@@ -4321,7 +3894,6 @@ Value* GlobVarDeclAST::codegen() {
         return LogErrorV("Invalid type for global variable '" + getName() + "'");
     }
     
-    // Create global variable with zero initializer
     Constant* InitVal = nullptr;
     
     if (VarType->isIntegerTy(32)) {
@@ -4350,11 +3922,9 @@ Value* GlobVarDeclAST::codegen() {
     return GV;
 }
 
-/// ArrayDeclAST::codegen - Generate code for array declarations
 Value* ArrayDeclAST::codegen() {
     DEBUG_CODEGEN("Generating array declaration: " + getName());
 
-    // Get base element type
     llvm::Type* BaseType = getTypeFromString(Type);
     if (!BaseType) {
         return LogErrorV("Invalid type '" + Type + "' for array '" + getName() + "'");
@@ -4376,10 +3946,8 @@ Value* ArrayDeclAST::codegen() {
     }
 
     if (IsGlobal) {
-        // Global array declaration
         DEBUG_CODEGEN("  Creating global array with type: " + TypeStr);
 
-        // Initialize with zeros
         Constant* InitVal = ConstantAggregateZero::get(FullArrayType);
 
         GlobalVariable* GV = new GlobalVariable(
@@ -4397,14 +3965,12 @@ Value* ArrayDeclAST::codegen() {
         DEBUG_CODEGEN("  Global array created successfully");
         return GV;
     } else {
-        // Local array declaration
         DEBUG_CODEGEN("  Creating local array with type: " + TypeStr);
 
         if (!CurrentFunction) {
             return LogErrorV("Array declaration outside of function");
         }
 
-        // Allocate array on the stack
         AllocaInst* Alloca = CreateEntryBlockAlloca(CurrentFunction, getName(), FullArrayType);
 
         // Note: We don't initialize arrays to zero explicitly
@@ -4419,7 +3985,6 @@ Value* ArrayDeclAST::codegen() {
     }
 }
 
-/// ArrayAccessAST::codegen - Generate code for array access expressions
 Value* ArrayAccessAST::codegen() {
     DEBUG_CODEGEN("Generating array access: " + getName());
 
@@ -4439,7 +4004,6 @@ Value* ArrayAccessAST::codegen() {
         if (BaseType->isPointerTy()) {
             DEBUG_CODEGEN("  Detected pointer parameter (array parameter)");
             isPointerParam = true;
-            // Load the pointer value
             ArrayPtr = Builder.CreateLoad(BaseType, ArrayAlloca, getName() + "_ptr");
         }
     } else {
@@ -4453,7 +4017,6 @@ Value* ArrayAccessAST::codegen() {
         }
     }
 
-    // Generate code for all index expressions
     std::vector<Value*> IndexValues;
 
     if (!isPointerParam) {
@@ -4461,14 +4024,12 @@ Value* ArrayAccessAST::codegen() {
         IndexValues.push_back(ConstantInt::get(Type::getInt32Ty(TheContext), 0));
     }
 
-    // Generate code for each subscript expression
     for (size_t i = 0; i < Indices.size(); i++) {
         Value* IndexVal = Indices[i]->codegen();
         if (!IndexVal) {
             return LogErrorV("Failed to generate code for array index");
         }
 
-        // Ensure index is an integer (cast if necessary)
         if (IndexVal->getType()->isFloatTy()) {
             DEBUG_CODEGEN("  Converting float index to int");
             IndexVal = Builder.CreateFPToSI(IndexVal, Type::getInt32Ty(TheContext), "floattoint");
@@ -4483,7 +4044,6 @@ Value* ArrayAccessAST::codegen() {
         DEBUG_CODEGEN("  Added index " + std::to_string(i));
     }
 
-    // Determine element type and create GEP
     Value* GEP = nullptr;
     Type* ElementType;
 
@@ -4497,9 +4057,7 @@ Value* ArrayAccessAST::codegen() {
         Type* ArrayTypeForGEP = getArrayTypeForParam(paramTypeStr);
         DEBUG_CODEGEN("  Multi-dim array param element type: " + paramTypeStr);
 
-        // Chain GEPs for each dimension
         // First GEP uses the array type (e.g., [10 x float])
-        // Subsequent GEPs use the element type
         for (size_t i = 0; i < IndexValues.size(); i++) {
             Type* GEPType = (i == 0) ? ArrayTypeForGEP : ElementType;
             CurrentPtr = Builder.CreateGEP(GEPType, CurrentPtr, IndexValues[i],
@@ -4507,13 +4065,11 @@ Value* ArrayAccessAST::codegen() {
         }
         GEP = CurrentPtr;
     } else if (isPointerParam) {
-        // Simple 1D array parameter
         std::string paramTypeStr = VariableTypes[getName()];
         ElementType = getElementTypeFromParamType(paramTypeStr);
         DEBUG_CODEGEN("  1D array param element type: " + paramTypeStr);
         GEP = Builder.CreateGEP(ElementType, ArrayPtr, IndexValues, "arrayidx");
     } else {
-        // Regular local/global array
         Type* GEPType = BaseType;
         ElementType = BaseType;
         for (size_t i = 1; i < IndexValues.size(); i++) {
@@ -4526,18 +4082,15 @@ Value* ArrayAccessAST::codegen() {
 
     DEBUG_CODEGEN("  Created GEP");
 
-    // Load the value at the array element
     Value* LoadedVal = Builder.CreateLoad(ElementType, GEP, "arrayelem");
 
     DEBUG_CODEGEN("  Array access code generation completed");
     return LoadedVal;
 }
 
-/// ArrayAssignmentExprAST::codegen - Generate code for array assignment expressions
 Value* ArrayAssignmentExprAST::codegen() {
     DEBUG_CODEGEN("Generating array assignment to: " + LHS->getName());
 
-    // Generate code for the RHS value
     Value* Val = RHS->codegen();
     if (!Val) {
         DEBUG_CODEGEN("  ERROR: Failed to generate RHS");
@@ -4560,7 +4113,6 @@ Value* ArrayAssignmentExprAST::codegen() {
         if (BaseType->isPointerTy()) {
             DEBUG_CODEGEN("  Detected pointer parameter (array parameter)");
             isPointerParam = true;
-            // Load the pointer value
             ArrayPtr = Builder.CreateLoad(BaseType, ArrayAlloca, LHS->getName() + "_ptr");
         }
     } else {
@@ -4574,7 +4126,6 @@ Value* ArrayAssignmentExprAST::codegen() {
         }
     }
 
-    // Generate code for all index expressions
     std::vector<Value*> IndexValues;
 
     if (!isPointerParam) {
@@ -4582,14 +4133,12 @@ Value* ArrayAssignmentExprAST::codegen() {
         IndexValues.push_back(ConstantInt::get(Type::getInt32Ty(TheContext), 0));
     }
 
-    // Generate code for each subscript expression
     for (size_t i = 0; i < LHS->getIndices().size(); i++) {
         Value* IndexVal = LHS->getIndices()[i]->codegen();
         if (!IndexVal) {
             return LogErrorV("Failed to generate code for array index");
         }
 
-        // Ensure index is an integer (cast if necessary)
         if (IndexVal->getType()->isFloatTy()) {
             DEBUG_CODEGEN("  Converting float index to int");
             IndexVal = Builder.CreateFPToSI(IndexVal, Type::getInt32Ty(TheContext), "floattoint");
@@ -4604,7 +4153,6 @@ Value* ArrayAssignmentExprAST::codegen() {
         DEBUG_CODEGEN("  Added index " + std::to_string(i));
     }
 
-    // Determine element type and create GEP
     Value* GEP = nullptr;
     Type* ElementType;
 
@@ -4615,9 +4163,7 @@ Value* ArrayAssignmentExprAST::codegen() {
         ElementType = getElementTypeFromParamType(paramTypeStr);
         Type* ArrayTypeForGEP = getArrayTypeForParam(paramTypeStr);
 
-        // Chain GEPs for each dimension
         // First GEP uses the array type (e.g., [10 x float])
-        // Subsequent GEPs use the element type
         for (size_t i = 0; i < IndexValues.size(); i++) {
             Type* GEPType = (i == 0) ? ArrayTypeForGEP : ElementType;
             CurrentPtr = Builder.CreateGEP(GEPType, CurrentPtr, IndexValues[i],
@@ -4625,12 +4171,10 @@ Value* ArrayAssignmentExprAST::codegen() {
         }
         GEP = CurrentPtr;
     } else if (isPointerParam) {
-        // Simple 1D array parameter
         std::string paramTypeStr = VariableTypes[LHS->getName()];
         ElementType = getElementTypeFromParamType(paramTypeStr);
         GEP = Builder.CreateGEP(ElementType, ArrayPtr, IndexValues, "arrayidx");
     } else {
-        // Regular local/global array
         Type* GEPType = BaseType;
         ElementType = BaseType;
         for (size_t i = 1; i < IndexValues.size(); i++) {
@@ -4643,7 +4187,6 @@ Value* ArrayAssignmentExprAST::codegen() {
 
     DEBUG_CODEGEN("  Created GEP");
 
-    // Type check and cast if necessary
     if (Val->getType() != ElementType) {
         Value* CastedVal = castToType(Val, ElementType);
         if (!CastedVal) {
@@ -4653,7 +4196,6 @@ Value* ArrayAssignmentExprAST::codegen() {
         DEBUG_CODEGEN("  Type converted for assignment");
     }
 
-    // Store the value to the array element
     Builder.CreateStore(Val, GEP);
 
     DEBUG_CODEGEN("  Array assignment successful");
@@ -4661,19 +4203,10 @@ Value* ArrayAssignmentExprAST::codegen() {
 }
 
 
+// ============================================================================
+// MAIN PROGRAM
+// ============================================================================
 
-//===----------------------------------------------------------------------===//
-// AST Printer
-//===----------------------------------------------------------------------===//
-
-// void IntASTnode::display(int tabs) {
-//   printf("%s\n",getType().c_str());
-// }
-
-
-//===----------------------------------------------------------------------===//
-// Main driver code.
-//===----------------------------------------------------------------------===//
 int main(int argc, char **argv) {
     initDebugLevel(argc, argv);
     ShowCompilationProgress();

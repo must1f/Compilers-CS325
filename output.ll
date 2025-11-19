@@ -3,32 +3,37 @@ source_filename = "mini-c"
 
 declare i32 @print_int(i32)
 
-define i32 @test_init() {
+define i32 @addition(i32 %n, i32 %m) {
 entry:
-  %i = alloca i32, align 4
-  %arr = alloca [5 x i32], align 4
-  store i32 0, ptr %i, align 4
-  store i32 0, ptr %i, align 4
-  br label %loop
+  %result = alloca i32, align 4
+  %m2 = alloca i32, align 4
+  %n1 = alloca i32, align 4
+  store i32 %n, ptr %n1, align 4
+  store i32 %m, ptr %m2, align 4
+  store i32 0, ptr %result, align 4
+  %n3 = load i32, ptr %n1, align 4
+  %m4 = load i32, ptr %m2, align 4
+  %add = add i32 %n3, %m4
+  store i32 %add, ptr %result, align 4
+  %n5 = load i32, ptr %n1, align 4
+  %eq = icmp eq i32 %n5, 4
+  br i1 %eq, label %then, label %else
 
-loop:                                             ; preds = %body, %entry
-  %i1 = load i32, ptr %i, align 4
-  %lt = icmp slt i32 %i1, 5
-  br i1 %lt, label %body, label %afterloop
+then:                                             ; preds = %entry
+  %n6 = load i32, ptr %n1, align 4
+  %m7 = load i32, ptr %m2, align 4
+  %add8 = add i32 %n6, %m7
+  %calltmp = call i32 @print_int(i32 %add8)
+  br label %ifcont
 
-body:                                             ; preds = %loop
-  %i2 = load i32, ptr %i, align 4
-  %mul = mul i32 %i2, 10
-  %i3 = load i32, ptr %i, align 4
-  %arrayidx = getelementptr [5 x i32], ptr %arr, i32 0, i32 %i3
-  store i32 %mul, ptr %arrayidx, align 4
-  %i4 = load i32, ptr %i, align 4
-  %add = add i32 %i4, 1
-  store i32 %add, ptr %i, align 4
-  br label %loop
+else:                                             ; preds = %entry
+  %n9 = load i32, ptr %n1, align 4
+  %m10 = load i32, ptr %m2, align 4
+  %mul = mul i32 %n9, %m10
+  %calltmp11 = call i32 @print_int(i32 %mul)
+  br label %ifcont
 
-afterloop:                                        ; preds = %loop
-  %arrayidx5 = getelementptr [5 x i32], ptr %arr, i32 0, i32 2
-  %arrayelem = load i32, ptr %arrayidx5, align 4
-  ret i32 %arrayelem
+ifcont:                                           ; preds = %else, %then
+  %result12 = load i32, ptr %result, align 4
+  ret i32 %result12
 }
