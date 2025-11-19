@@ -1,0 +1,49 @@
+# Build artifacts
+mccomp
+*.o
+output.ll
+output.s
+*.ll
+*.s
+
+# Test executables
+test_array_addition
+test_array_func
+test_global
+test_matrix
+test_exe
+tests/addition/add
+tests/factorial/fact
+tests/fibonacci/fib
+tests/pi/pi
+tests/while/while
+tests/void/void
+tests/cosine/cosine
+tests/unary/unary
+tests/palindrome/palindrome
+tests/recurse/recurse
+tests/rfact/rfact
+tests/leap/leap
+tests/array_addition/array_addition
+tests/array_func_arg_1d/array_func_arg
+tests/matrix_multiplication/matrix_mul
+tests/global_array/global_array
+
+# Test outputs
+tests/*/output.ll
+tests/*/output.s
+perf_out
+
+# Generated files
+Makefile.local
+Makefile.test
+tests/tests_local.sh
+
+# IDE
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.swp
+*~
