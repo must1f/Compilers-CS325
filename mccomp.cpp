@@ -85,7 +85,6 @@ public:
 #endif
 
 //===----------------------------------------------------------------------===//
-// Debug Infrastructure
 //===----------------------------------------------------------------------===//
 
 //==============================================================================
@@ -231,7 +230,6 @@ static void ShowPhaseComplete(const std::string& phase) {
 }
 
 //===----------------------------------------------------------------------===//
-// Error Reporting Infrastructure
 //===----------------------------------------------------------------------===//
 
 enum class ErrorType {
@@ -332,7 +330,6 @@ static void PrintAllErrors() {
 }
 
 //===----------------------------------------------------------------------===//
-// Type Helper Functions
 //===----------------------------------------------------------------------===//
 
 static std::string getTypeName(Type* T) {
@@ -379,9 +376,7 @@ struct TypeInfo {
 
 static std::map<std::string, TypeInfo> SymbolTypeTable;
 
-// TypeInfo - Structure to hold type information
 
-// getTypeInfo - Get type information for a variable
 static TypeInfo* getTypeInfo(const std::string& varName) {
     auto it = SymbolTypeTable.find(varName);
     if (it != SymbolTypeTable.end()) {
@@ -455,7 +450,6 @@ static void DUMP_SYMBOL_TABLE() {
 }
 
 //===----------------------------------------------------------------------===//
-// AST Display Infrastructure
 //===----------------------------------------------------------------------===//
 
 namespace ASTPrint {
@@ -487,10 +481,8 @@ namespace ASTPrint {
 FILE *pFile;
 
 //===----------------------------------------------------------------------===//
-// Lexer
 //===----------------------------------------------------------------------===//
 
-// The lexer returns one of these for known things.
 enum TOKEN_TYPE {
 
   IDENT = -1,        // [a-zA-Z_][a-zA-Z_0-9]*
@@ -602,8 +594,6 @@ static TOKEN returnTok(std::string lexVal, int tok_type) {
   return return_tok;
 }
 
-// Read file line by line -- or look for \n and if found add 1 to line number
-// and reset column number to 0
 // gettok - Return the next token from standard input.
 static TOKEN gettok() {
 
@@ -836,12 +826,8 @@ static TOKEN gettok() {
 }
 
 //===----------------------------------------------------------------------===//
-// Parser
 //===----------------------------------------------------------------------===//
 
-// CurTok/getNextToken - Provide a simple token buffer.  CurTok is the current
-// token the parser is looking at.  getNextToken reads another token from the
-// lexer and updates CurTok with its results.
 static TOKEN CurTok;
 static std::deque<TOKEN> tok_buffer;
 
