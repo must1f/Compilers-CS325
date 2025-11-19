@@ -1,0 +1,125 @@
+Cleanup *****
+Compile *****
+rm -rf mccomp 
+clang++ -std=c++17 mccomp.cpp -g -O3 `llvm-config --cppflags --ldflags --system-libs --libs all` -Wno-unused-function -Wno-unknown-warning-option -fno-rtti -o mccomp
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/mccomp
+Test *****
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/addition
+found param in param_list_prime: m
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./add
+PASSED Result: 9
+PASSED Result: 9
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/factorial
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./fact
+PASSED Result: 3628800
+PASSED Result: 3628800
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/fibonacci
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./fib
+PASSED Result: 88
+PASSED Result: 88
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/pi
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./pi
+PASSED Result for PI is : 3.141595
+PASSED Result for PI is : 3.141595
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/while
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./while
+PASSED Result: 10
+PASSED Result: 10
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/void
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./void
+PASSED Result: 
+PASSED Result: 
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/cosine
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./cosine
+PASSED Result: 
+PASSED Result: 
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/unary
+found param in param_list_prime: m
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./unary
+Result: PASSED
+Result: PASSED
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/recurse
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./recurse
+PASSED Result: 210
+PASSED Result: 210
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/rfact
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./rfact
+PASSED Result: 3628800
+PASSED Result: 3628800
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/palindrome
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./palindrome
+PASSED Result: 
+PASSED Result: 
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/leap
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./leap
+PASSED Result: 1 for year: 2000
+PASSED Result: 0 for year: 1900
+PASSED Result: 1 for year: 2012
+PASSED Result: 0 for year: 2019
+PASSED Result: 1 for year: 2000
+PASSED Result: 0 for year: 1900
+PASSED Result: 1 for year: 2012
+PASSED Result: 0 for year: 2019
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/null
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+null test PASSED
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/array_addition
+found param in param_list_prime: m
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./array_addition
+PASSED Result: 9
+PASSED Result: 9
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/array_func_arg_1d
+found param in param_list_prime: b
+found param in param_list_prime: n
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************
+
+./array_func_arg
+PASSED Result: 110
+PASSED Result: 110
+/dcs/23/u5502438/Year 3/CS325/Coursework/Compilers-CS325/tests/matrix_multiplication
+found param in param_list_prime: b
+found param in param_list_prime: c
+found param in param_list_prime: n
+********************* FINAL IR (begin) ****************************
+********************* FINAL IR (end) ******************************

@@ -862,6 +862,7 @@ public:
   virtual ~ASTnode() {}
   virtual Value *codegen() { return nullptr; };
   virtual std::string to_string() const { return ""; };
+  virtual bool isArrayAccess() const { return false; }
 };
 
 /// IntASTnode - Class for integer literals like 1, 2, 10,
@@ -963,6 +964,9 @@ class DeclAST : public ASTnode {
 
 public:
   virtual ~DeclAST() {}
+  virtual const std::string &getName() const = 0;
+  virtual const std::string &getType() const = 0;
+  virtual bool isArray() const { return false; }
 };
 
 /// VarDeclAST - Class for a variable declaration
@@ -973,8 +977,8 @@ class VarDeclAST : public DeclAST {
 public:
   VarDeclAST(std::unique_ptr<VariableASTnode> var, const std::string &type)
       : Var(std::move(var)), Type(type) {}
-  const std::string &getType() const { return Type; }
-  const std::string &getName() const { return Var->getName(); }
+  const std::string &getType() const override { return Type; }
+  const std::string &getName() const override { return Var->getName(); }
 
   virtual std::string to_string() const override {
     return std::string(COLOR_CYAN) + "VarDecl" + std::string(COLOR_RESET) + " [" + 
@@ -991,15 +995,83 @@ class GlobVarDeclAST : public DeclAST {
 public:
   GlobVarDeclAST(std::unique_ptr<VariableASTnode> var, const std::string &type)
       : Var(std::move(var)), Type(type) {}
-  const std::string &getType() const { return Type; }
-  const std::string &getName() const { return Var->getName(); }
+  const std::string &getType() const override { return Type; }
+  const std::string &getName() const override { return Var->getName(); }
 
   virtual Value *codegen() override;
 
   virtual std::string to_string() const override {
-    return std::string(COLOR_CYAN) + "GlobalVarDecl" + std::string(COLOR_RESET) + " [" + 
-           std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " + 
+    return std::string(COLOR_CYAN) + "GlobalVarDecl" + std::string(COLOR_RESET) + " [" +
+           std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " +
            std::string(COLOR_BOLD) + Var->getName() + std::string(COLOR_RESET) + "]";
+  }
+};
+
+/// ArrayDeclAST - Class for array declarations (1D, 2D, 3D)
+class ArrayDeclAST : public DeclAST {
+  std::string Name;
+  std::string Type;
+  std::vector<int> Dimensions; // Stores 1-3 dimension sizes
+  bool IsGlobal;
+
+public:
+  ArrayDeclAST(const std::string &name, const std::string &type,
+               std::vector<int> dims, bool isGlobal = false)
+      : Name(name), Type(type), Dimensions(std::move(dims)), IsGlobal(isGlobal) {}
+
+  const std::string &getName() const override { return Name; }
+  const std::string &getType() const override { return Type; }
+  const std::vector<int> &getDimensions() const { return Dimensions; }
+  bool isGlobal() const { return IsGlobal; }
+  virtual bool isArray() const override { return true; }
+
+  virtual Value *codegen() override;
+
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_CYAN);
+    result += (IsGlobal ? "GlobalArrayDecl" : "ArrayDecl");
+    result += std::string(COLOR_RESET) + " [" +
+              std::string(COLOR_YELLOW) + Type + std::string(COLOR_RESET) + " " +
+              std::string(COLOR_BOLD) + Name + std::string(COLOR_RESET);
+
+    // Add dimension info
+    for (size_t i = 0; i < Dimensions.size(); i++) {
+      result += "[" + std::to_string(Dimensions[i]) + "]";
+    }
+    result += "]";
+    return result;
+  }
+};
+
+/// ArrayAccessAST - Class for array access expressions (arr[i], arr[i][j], arr[i][j][k])
+class ArrayAccessAST : public ASTnode {
+  std::string Name;
+  std::vector<std::unique_ptr<ASTnode>> Indices; // Stores 1-3 index expressions
+
+public:
+  ArrayAccessAST(const std::string &name,
+                 std::vector<std::unique_ptr<ASTnode>> indices)
+      : Name(name), Indices(std::move(indices)) {}
+
+  const std::string &getName() const { return Name; }
+  std::vector<std::unique_ptr<ASTnode>> &getIndices() { return Indices; }
+
+  virtual bool isArrayAccess() const override { return true; }
+  virtual Value *codegen() override;
+
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_CYAN) + "ArrayAccess" + std::string(COLOR_RESET) +
+                        " [" + std::string(COLOR_BOLD) + Name + std::string(COLOR_RESET);
+
+    for (size_t i = 0; i < Indices.size(); i++) {
+      result += "[";
+      if (Indices[i]) {
+        result += Indices[i]->to_string();
+      }
+      result += "]";
+    }
+    result += "]";
+    return result;
   }
 };
 
@@ -1066,11 +1138,11 @@ public:
 
 /// BlockAST - Class for a block with declarations followed by statements
 class BlockAST : public ASTnode {
-  std::vector<std::unique_ptr<VarDeclAST>> LocalDecls; // vector of local decls
+  std::vector<std::unique_ptr<DeclAST>> LocalDecls; // vector of local decls (variables and arrays)
   std::vector<std::unique_ptr<ASTnode>> Stmts;         // vector of statements
 
 public:
-  BlockAST(std::vector<std::unique_ptr<VarDeclAST>> localDecls,
+  BlockAST(std::vector<std::unique_ptr<DeclAST>> localDecls,
            std::vector<std::unique_ptr<ASTnode>> stmts)
       : LocalDecls(std::move(localDecls)), Stmts(std::move(stmts)) {}
   
@@ -1130,6 +1202,49 @@ public:
   }
 };
 
+/// ArrayAssignmentExprAST - Class for array assignment expressions (arr[i][j] = expr)
+class ArrayAssignmentExprAST : public ASTnode {
+  std::unique_ptr<ArrayAccessAST> LHS; // The array access on left-hand side
+  std::unique_ptr<ASTnode> RHS;        // The right-hand side expression
+
+public:
+  ArrayAssignmentExprAST(std::unique_ptr<ArrayAccessAST> lhs,
+                         std::unique_ptr<ASTnode> rhs)
+      : LHS(std::move(lhs)), RHS(std::move(rhs)) {}
+
+  std::unique_ptr<ArrayAccessAST> &getLHS() { return LHS; }
+  std::unique_ptr<ASTnode> &getRHS() { return RHS; }
+
+  virtual Value* codegen() override;
+
+  virtual std::string to_string() const override {
+    std::string result = std::string(COLOR_MAGENTA) + "ArrayAssignmentExpr" + std::string(COLOR_RESET) + "\n";
+
+    ASTPrint::indentLevel++;
+
+    result += ASTPrint::indent() + ASTPrint::BRANCH;
+    result += std::string(COLOR_BLUE) + "Target: " + std::string(COLOR_RESET);
+    if (LHS) {
+      result += LHS->to_string();
+    } else {
+      result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+    }
+    result += "\n";
+
+    result += ASTPrint::indent() + ASTPrint::LAST_BRANCH;
+    result += std::string(COLOR_BLUE) + "Value: " + std::string(COLOR_RESET);
+    if (RHS) {
+      result += RHS->to_string();
+    } else {
+      result += std::string(COLOR_RED) + "nullptr" + std::string(COLOR_RESET);
+    }
+
+    ASTPrint::indentLevel--;
+
+    return result;
+  }
+};
+
 /// FunctionDeclAST - This class represents a function definition itself.
 class FunctionDeclAST : public DeclAST {
   std::unique_ptr<FunctionPrototypeAST> Proto;
@@ -1139,6 +1254,9 @@ public:
   FunctionDeclAST(std::unique_ptr<FunctionPrototypeAST> Proto,
                   std::unique_ptr<ASTnode> Block)
       : Proto(std::move(Proto)), Block(std::move(Block)) {}
+
+  const std::string &getName() const override { return Proto->getName(); }
+  const std::string &getType() const override { return Proto->getType(); }
 
   virtual Value *codegen() override;
 
@@ -1619,7 +1737,7 @@ static std::unique_ptr<ASTnode> ParseStmt();
 static std::unique_ptr<ASTnode> ParseBlock();
 static std::unique_ptr<ASTnode> ParseExper();
 static std::unique_ptr<ParamAST> ParseParam();
-static std::unique_ptr<VarDeclAST> ParseLocalDecl();
+static std::unique_ptr<DeclAST> ParseLocalDecl();
 static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime();
 
 // element ::= FLOAT_LIT
@@ -1671,8 +1789,7 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
 }
 
 
-// param ::= var_type IDENT
-// param ::= var_type IDENT
+// param ::= var_type IDENT ["[" INT_LIT "]"]*
 static std::unique_ptr<ParamAST> ParseParam() {
   std::string Type = CurTok.lexeme; // keep track of the type of the param
   getNextToken();                   // eat the type token
@@ -1680,8 +1797,39 @@ static std::unique_ptr<ParamAST> ParseParam() {
   if (CurTok.type == IDENT) { // parameter declaration
     std::string Name = CurTok.getIdentifierStr();
     getNextToken(); // eat "IDENT"
-    
-    // Actually create and return the parameter!
+
+    // Check for array parameter syntax: int a[10], int arr[10][5], etc.
+    // In C/C++, array parameters decay to pointers
+    std::vector<int> dimensions;
+    while (CurTok.type == LBOX) {
+      getNextToken(); // eat '['
+
+      if (CurTok.type == INT_LIT) {
+        dimensions.push_back(CurTok.getIntVal());
+        getNextToken(); // eat INT_LIT
+      }
+      // Note: In parameter position, int a[] is allowed (no size)
+      // We just ignore the size as it decays to pointer anyway
+
+      if (CurTok.type != RBOX) {
+        return LogError(CurTok, "expected ']' in parameter array declaration"), nullptr;
+      }
+      getNextToken(); // eat ']'
+    }
+
+    // For array parameters, convert to pointer type representation
+    // int a[10] -> pointer to int (stored as "int*")
+    // int arr[10][5] -> pointer to array of 5 ints (stored as "int*[5]")
+    if (!dimensions.empty()) {
+      std::string PtrType = Type + "*";
+      // For multi-dimensional arrays, keep the trailing dimensions
+      for (size_t i = 1; i < dimensions.size(); i++) {
+        PtrType += "[" + std::to_string(dimensions[i]) + "]";
+      }
+      Type = PtrType;
+      DEBUG_PARSER("Parsed array parameter, converted to pointer type: " + Type);
+    }
+
     return std::make_unique<ParamAST>(Name, Type);
   } else {
     return LogError(CurTok, "expected identifier in parameter declaration"), nullptr;
@@ -1741,6 +1889,166 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
   }
 
   return param_list;
+}
+
+//===----------------------------------------------------------------------===//
+// Array Parsing Functions
+//===----------------------------------------------------------------------===//
+
+// array_dims_cont2 ::= "[" INT_LIT "]" | ε
+static bool ParseArrayDimsCont2(std::vector<int> &dimensions) {
+  if (CurTok.type == LBOX) {
+    getNextToken(); // eat '['
+
+    if (CurTok.type != INT_LIT) {
+      LogError(CurTok, "expected integer literal for array dimension size");
+      return false;
+    }
+
+    int size = CurTok.getIntVal();
+    if (size <= 0) {
+      LogError(CurTok, "array dimension must be greater than 0");
+      return false;
+    }
+
+    dimensions.push_back(size);
+    getNextToken(); // eat INT_LIT
+
+    if (CurTok.type != RBOX) {
+      LogError(CurTok, "expected ']' after array dimension");
+      return false;
+    }
+    getNextToken(); // eat ']'
+
+    // Check for 4D arrays (not allowed)
+    if (CurTok.type == LBOX) {
+      LogError(CurTok, "arrays with more than 3 dimensions are not supported");
+      return false;
+    }
+
+    return true;
+  }
+  // ε production - this is fine, we can have 2D arrays
+  return true;
+}
+
+// array_dims_cont ::= "[" INT_LIT "]" array_dims_cont2 | ε
+static bool ParseArrayDimsCont(std::vector<int> &dimensions) {
+  if (CurTok.type == LBOX) {
+    getNextToken(); // eat '['
+
+    if (CurTok.type != INT_LIT) {
+      LogError(CurTok, "expected integer literal for array dimension size");
+      return false;
+    }
+
+    int size = CurTok.getIntVal();
+    if (size <= 0) {
+      LogError(CurTok, "array dimension must be greater than 0");
+      return false;
+    }
+
+    dimensions.push_back(size);
+    getNextToken(); // eat INT_LIT
+
+    if (CurTok.type != RBOX) {
+      LogError(CurTok, "expected ']' after array dimension");
+      return false;
+    }
+    getNextToken(); // eat ']'
+
+    // Parse optional third dimension
+    return ParseArrayDimsCont2(dimensions);
+  }
+  // ε production - this is fine, we can have 1D arrays
+  return true;
+}
+
+// array_access_cont2 ::= "[" expr "]" | ε
+static bool ParseArrayAccessCont2(std::vector<std::unique_ptr<ASTnode>> &indices) {
+  if (CurTok.type == LBOX) {
+    getNextToken(); // eat '['
+
+    auto index = ParseExper();
+    if (!index) {
+      return false;
+    }
+
+    indices.push_back(std::move(index));
+
+    if (CurTok.type != RBOX) {
+      LogError(CurTok, "expected ']' after array index");
+      return false;
+    }
+    getNextToken(); // eat ']'
+
+    // Check for 4D array access (not allowed)
+    if (CurTok.type == LBOX) {
+      LogError(CurTok, "arrays with more than 3 dimensions are not supported");
+      return false;
+    }
+
+    return true;
+  }
+  // ε production - this is fine, we can have 2D array access
+  return true;
+}
+
+// array_access_cont ::= "[" expr "]" array_access_cont2 | ε
+static bool ParseArrayAccessCont(std::vector<std::unique_ptr<ASTnode>> &indices) {
+  if (CurTok.type == LBOX) {
+    getNextToken(); // eat '['
+
+    auto index = ParseExper();
+    if (!index) {
+      return false;
+    }
+
+    indices.push_back(std::move(index));
+
+    if (CurTok.type != RBOX) {
+      LogError(CurTok, "expected ']' after array index");
+      return false;
+    }
+    getNextToken(); // eat ']'
+
+    // Parse optional third dimension
+    return ParseArrayAccessCont2(indices);
+  }
+  // ε production - this is fine, we can have 1D array access
+  return true;
+}
+
+// array_access ::= "[" expr "]" array_access_cont
+static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &arrayName) {
+  std::vector<std::unique_ptr<ASTnode>> indices;
+
+  if (CurTok.type != LBOX) {
+    LogError(CurTok, "expected '[' for array access");
+    return nullptr;
+  }
+
+  getNextToken(); // eat '['
+
+  auto index = ParseExper();
+  if (!index) {
+    return nullptr;
+  }
+
+  indices.push_back(std::move(index));
+
+  if (CurTok.type != RBOX) {
+    LogError(CurTok, "expected ']' after array index");
+    return nullptr;
+  }
+  getNextToken(); // eat ']'
+
+  // Parse additional dimensions
+  if (!ParseArrayAccessCont(indices)) {
+    return nullptr;
+  }
+
+  return std::make_unique<ArrayAccessAST>(arrayName, std::move(indices));
 }
 
 // TODO : Task 2 - Parser
@@ -1822,27 +2130,35 @@ static std::unique_ptr<ASTnode> ParsePrimaryExpr() {
     return expr;
   }
   
-  // Case 2: Identifier (variable or function call)
+  // Case 2: Identifier (variable, array access, or function call)
   if (CurTok.type == IDENT) {
     std::string idName = CurTok.getIdentifierStr();
     TOKEN idTok = CurTok;
     getNextToken(); // eat identifier
-    
+
     // Check for function call
     if (CurTok.type == LPAR) {
       getNextToken(); // eat '('
-      
+
       auto call = ParseFunctionCall(idName, idTok);
       if (!call)
         return nullptr;
-      
+
       if (CurTok.type != RPAR)
         return LogError(CurTok, "expected ')' after arguments");
-      
+
       getNextToken(); // eat ')'
       return call;
     }
-    
+
+    // Check for array access
+    if (CurTok.type == LBOX) {
+      auto arrayAccess = ParseArrayAccess(idName);
+      if (!arrayAccess)
+        return nullptr;
+      return arrayAccess;
+    }
+
     // Just a variable reference
     return std::make_unique<VariableASTnode>(idTok, idName);
   }
@@ -2068,44 +2384,65 @@ static std::unique_ptr<ASTnode> ParseOrExpr() {
 ///   expr ::= IDENT "=" expr
 ///         |  or_expr
 ///
-/// This production requires LL(2) lookahead because both alternatives
-/// begin with IDENT. We must peek at the second token to decide:
-///   - FIRST₂(IDENT "=" expr) = {(IDENT, =)}
-///   - FIRST₂(or_expr)        = {(IDENT, +), (IDENT, *), ...}
+/// After parsing or_expr, check if result is an array access and next token is '='
+/// to handle array assignment.
 ///
-/// Implementation uses explicit lookahead rather than backtracking
-/// for proper predictive parsing.
+/// This production requires LL(2) lookahead for simple variable assignment.
+/// Array assignments are detected after parsing the lvalue.
 static std::unique_ptr<ASTnode> ParseExper() {
     PARSER_ENTER("ParseExper", CurTok);
-    
+
+    // Check for simple variable assignment: IDENT = expr
     if (CurTok.type == IDENT) {
         TOKEN nextTok = peekNextToken();
-        
-        DEBUG_PARSER("Checking for assignment: IDENT='" + CurTok.lexeme + 
-                    "', next token='" + nextTok.lexeme + "'");
-        
+
         if (nextTok.type == ASSIGN) {
             std::string varName = CurTok.getIdentifierStr();
             DEBUG_PARSER("Found assignment to variable '" + varName + "'");
-            
-            getNextToken();
-            getNextToken();
-            
+
+            getNextToken(); // eat IDENT
+            getNextToken(); // eat '='
+
             auto RHS = ParseExper();
             if (!RHS) {
                 PARSER_EXIT("ParseExper", false);
                 return nullptr;
             }
-            
+
             auto result = std::make_unique<AssignmentExprAST>(varName, std::move(RHS));
             PARSER_EXIT("ParseExper", true);
             return result;
         }
     }
-    
-    auto result = ParseOrExpr();
-    PARSER_EXIT("ParseExper", result != nullptr);
-    return result;
+
+    // Parse as general expression (includes array accesses, function calls, etc.)
+    auto LHS = ParseOrExpr();
+    if (!LHS) {
+        PARSER_EXIT("ParseExper", false);
+        return nullptr;
+    }
+
+    // Check if we parsed an array access and it's followed by '='
+    if (LHS->isArrayAccess() && CurTok.type == ASSIGN) {
+        DEBUG_PARSER("Found array assignment");
+        getNextToken(); // eat '='
+
+        auto RHS = ParseExper();
+        if (!RHS) {
+            PARSER_EXIT("ParseExper", false);
+            return nullptr;
+        }
+
+        // Extract the array access from LHS (we need to transfer ownership)
+        std::unique_ptr<ArrayAccessAST> arrayAccessPtr(static_cast<ArrayAccessAST*>(LHS.release()));
+        auto result = std::make_unique<ArrayAssignmentExprAST>(std::move(arrayAccessPtr), std::move(RHS));
+        PARSER_EXIT("ParseExper", true);
+        return result;
+    }
+
+    // Not an assignment, just return the expression
+    PARSER_EXIT("ParseExper", true);
+    return LHS;
 }
 
 
@@ -2341,8 +2678,8 @@ static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime() {
 
 // local_decls_prime ::= local_decl local_decls_prime
 //                    |  ε
-static std::vector<std::unique_ptr<VarDeclAST>> ParseLocalDeclsPrime() {
-  std::vector<std::unique_ptr<VarDeclAST>>
+static std::vector<std::unique_ptr<DeclAST>> ParseLocalDeclsPrime() {
+  std::vector<std::unique_ptr<DeclAST>>
       local_decls_prime; // vector of local decls
 
   if (CurTok.type == INT_TOK || CurTok.type == FLOAT_TOK ||
@@ -2373,44 +2710,92 @@ static std::vector<std::unique_ptr<VarDeclAST>> ParseLocalDeclsPrime() {
   return local_decls_prime;
 }
 
-// local_decl ::= var_type IDENT ";"
+// local_decl ::= var_type IDENT local_decl_suffix
+// local_decl_suffix ::= "[" INT_LIT "]" array_dims_cont ";" | ";"
 // var_type ::= "int"
 //           |  "float"
 //           |  "bool"
-static std::unique_ptr<VarDeclAST> ParseLocalDecl() {
+static std::unique_ptr<DeclAST> ParseLocalDecl() {
   TOKEN PrevTok;
   std::string Type;
   std::string Name = "";
-  std::unique_ptr<VarDeclAST> local_decl;
 
   if (CurTok.type == INT_TOK || CurTok.type == FLOAT_TOK ||
       CurTok.type == BOOL_TOK) { // FIRST(var_type)
     PrevTok = CurTok;
     getNextToken(); // eat 'int' or 'float or 'bool'
+
     if (CurTok.type == IDENT) {
       Type = PrevTok.lexeme;
       Name = CurTok.getIdentifierStr(); // save the identifier name
       auto ident = std::make_unique<VariableASTnode>(CurTok, Name);
-      local_decl = std::make_unique<VarDeclAST>(std::move(ident), Type);
 
       getNextToken(); // eat 'IDENT'
-      if (CurTok.type != SC) {
-        LogError(CurTok, "Expected ';' to end local variable declaration");
+
+      // Use LL(2) lookahead to distinguish between simple variable and array
+      if (CurTok.type == SC) {
+        // Simple variable declaration: type IDENT;
+        std::unique_ptr<DeclAST> local_decl = std::make_unique<VarDeclAST>(std::move(ident), Type);
+        getNextToken(); // eat ';'
+        fprintf(stderr, "Parsed a local variable declaration\n");
+        return local_decl;
+      } else if (CurTok.type == LBOX) {
+        // Array declaration: type IDENT[dim1][dim2]...[dimN];
+        std::vector<int> dimensions;
+
+        // Parse first dimension
+        getNextToken(); // eat '['
+
+        if (CurTok.type != INT_LIT) {
+          LogError(CurTok, "expected integer literal for array dimension size");
+          return nullptr;
+        }
+
+        int size = CurTok.getIntVal();
+        if (size <= 0) {
+          LogError(CurTok, "array dimension must be greater than 0");
+          return nullptr;
+        }
+
+        dimensions.push_back(size);
+        getNextToken(); // eat INT_LIT
+
+        if (CurTok.type != RBOX) {
+          LogError(CurTok, "expected ']' after array dimension");
+          return nullptr;
+        }
+        getNextToken(); // eat ']'
+
+        // Parse additional dimensions
+        if (!ParseArrayDimsCont(dimensions)) {
+          return nullptr;
+        }
+
+        if (CurTok.type != SC) {
+          LogError(CurTok, "expected ';' after local array declaration");
+          return nullptr;
+        }
+        getNextToken(); // eat ';'
+
+        fprintf(stderr, "Parsed a local array declaration\n");
+        std::unique_ptr<DeclAST> arrayDecl = std::make_unique<ArrayDeclAST>(
+            Name, Type, std::move(dimensions), false);
+        return arrayDecl;
+      } else {
+        LogError(CurTok, "Expected ';' or '[' after identifier in local declaration");
         return nullptr;
       }
-      getNextToken(); // eat ';'
-      fprintf(stderr, "Parsed a local variable declaration\n");
     } else {
-      LogError(CurTok, "expected identifier' in local variable declaration");
+      LogError(CurTok, "expected identifier in local variable declaration");
       return nullptr;
     }
   }
-  return local_decl;
+  return nullptr;
 }
 
 // local_decls ::= local_decl local_decls_prime
-static std::vector<std::unique_ptr<VarDeclAST>> ParseLocalDecls() {
-  std::vector<std::unique_ptr<VarDeclAST>> local_decls; // vector of local decls
+static std::vector<std::unique_ptr<DeclAST>> ParseLocalDecls() {
+  std::vector<std::unique_ptr<DeclAST>> local_decls; // vector of local decls
 
   if (CurTok.type == INT_TOK || CurTok.type == FLOAT_TOK ||
       CurTok.type == BOOL_TOK) { // FIRST(local_decl)
@@ -2444,7 +2829,7 @@ static std::vector<std::unique_ptr<VarDeclAST>> ParseLocalDecls() {
 // parse block
 // block ::= "{" local_decls stmt_list "}"
 static std::unique_ptr<ASTnode> ParseBlock() {
-  std::vector<std::unique_ptr<VarDeclAST>> local_decls; // vector of local decls
+  std::vector<std::unique_ptr<DeclAST>> local_decls; // vector of local decls (variables and arrays)
   std::vector<std::unique_ptr<ASTnode>> stmt_list;      // vector of statements
 
   getNextToken(); // eat '{'
@@ -2481,10 +2866,12 @@ static std::unique_ptr<ASTnode> ParseDecl() {
     if (CurTok.type == IDENT) {
       auto ident = std::make_unique<VariableASTnode>(CurTok, IdName);
       getNextToken(); // eat the IDENT
-      if (CurTok.type ==
-          SC) {         // found ';' then this is a global variable declaration.
+
+      // Use LL(2) lookahead to distinguish between simple variable, array, and function
+      if (CurTok.type == SC) {
+        // Simple variable declaration: type IDENT;
         getNextToken(); // eat ;
-        
+
         fprintf(stderr, "Parsed a variable declaration\n");
 
         if (PrevTok.type != VOID_TOK) {
@@ -2493,15 +2880,62 @@ static std::unique_ptr<ASTnode> ParseDecl() {
               std::move(ident), PrevTok.lexeme);
 
           globVar->codegen();
-          
+
           printAST(globVar, "Global Variable: " + IdName);
           return globVar;
         } else {
           return LogError(PrevTok,
                           "Cannot have variable declaration with type 'void'");
         }
-      } else if (CurTok.type ==
-                 LPAR) { // found '(' then this is a function declaration.
+      } else if (CurTok.type == LBOX) {
+        // Array declaration: type IDENT[dim1][dim2]...[dimN];
+        std::vector<int> dimensions;
+
+        // Parse first dimension
+        getNextToken(); // eat '['
+
+        if (CurTok.type != INT_LIT) {
+          return LogError(CurTok, "expected integer literal for array dimension size"), nullptr;
+        }
+
+        int size = CurTok.getIntVal();
+        if (size <= 0) {
+          return LogError(CurTok, "array dimension must be greater than 0"), nullptr;
+        }
+
+        dimensions.push_back(size);
+        getNextToken(); // eat INT_LIT
+
+        if (CurTok.type != RBOX) {
+          return LogError(CurTok, "expected ']' after array dimension"), nullptr;
+        }
+        getNextToken(); // eat ']'
+
+        // Parse additional dimensions
+        if (!ParseArrayDimsCont(dimensions)) {
+          return nullptr;
+        }
+
+        if (CurTok.type != SC) {
+          return LogError(CurTok, "expected ';' after array declaration"), nullptr;
+        }
+        getNextToken(); // eat ';'
+
+        fprintf(stderr, "Parsed an array declaration\n");
+
+        if (PrevTok.type != VOID_TOK) {
+          std::unique_ptr<ASTnode> arrayDecl = std::make_unique<ArrayDeclAST>(
+              IdName, PrevTok.lexeme, std::move(dimensions), true);
+
+          arrayDecl->codegen();
+
+          printAST(arrayDecl, "Global Array: " + IdName);
+          return arrayDecl;
+        } else {
+          return LogError(PrevTok, "Cannot have array declaration with type 'void'");
+        }
+      } else if (CurTok.type == LPAR) {
+        // Function declaration: type IDENT(params) { ... }
         getNextToken();  // eat (
 
         auto P =
@@ -2715,7 +3149,14 @@ static Type* getTypeFromString(const std::string& typeStr) {
         return Type::getInt1Ty(TheContext);
     if (typeStr == "void")
         return Type::getVoidTy(TheContext);
-    
+
+    // Handle pointer types (for array parameters)
+    if (typeStr.find('*') != std::string::npos) {
+        // In LLVM 21+ with opaque pointers, all pointers are just 'ptr' type
+        // We use the context-based API instead of typed pointers
+        return PointerType::get(TheContext, 0);
+    }
+
     fprintf(stderr, "Error: Unknown type '%s'\n", typeStr.c_str());
     return nullptr;
 }
@@ -3619,44 +4060,54 @@ Value* BlockAST::codegen() {
     Function* TheFunction = Builder.GetInsertBlock()->getParent();
     
     // Generate code for local declarations
-    // Generate code for local declarations
     for (auto& decl : LocalDecls) {
         const std::string& VarName = decl->getName();
         const std::string& TypeStr = decl->getType();
-        
-        DEBUG_CODEGEN("  Declaring local variable: " + VarName + " : " + TypeStr);
-        
+
+        DEBUG_CODEGEN("  Declaring local variable/array: " + VarName + " : " + TypeStr);
+
         // Check if shadowing a global variable (allowed)
         if (GlobalValues.find(VarName) != GlobalValues.end()) {
             DEBUG_CODEGEN("    Shadowing global variable '" + VarName + "'");
         }
-        
+
         // Save old binding if variable already exists in current scope
         if (NamedValues[VarName]) {
             OldBindings[VarName] = NamedValues[VarName];
             DEBUG_CODEGEN("    Shadowing local variable from outer scope");
         }
-        
-        Type* VarType = getTypeFromString(TypeStr);
-        if (!VarType) {
-            LogCompilerError(ErrorType::SEMANTIC_TYPE, 
-                            "Invalid type '" + TypeStr + "' for variable '" + VarName + "'");
-            return nullptr;
+
+        // Check if this is an array declaration
+        if (decl->isArray()) {
+            // Array declaration - call its codegen method
+            DEBUG_CODEGEN("    Processing as array declaration");
+            if (!decl->codegen()) {
+                return nullptr;
+            }
+        } else {
+            // Simple variable declaration
+            DEBUG_CODEGEN("    Processing as simple variable declaration");
+            Type* VarType = getTypeFromString(TypeStr);
+            if (!VarType) {
+                LogCompilerError(ErrorType::SEMANTIC_TYPE,
+                                "Invalid type '" + TypeStr + "' for variable '" + VarName + "'");
+                return nullptr;
+            }
+
+            AllocaInst* Alloca = CreateEntryBlockAlloca(TheFunction, VarName, VarType);
+
+            // Initialize to zero
+            if (VarType->isIntegerTy(32)) {
+                Builder.CreateStore(ConstantInt::get(VarType, 0), Alloca);
+            } else if (VarType->isFloatTy()) {
+                Builder.CreateStore(ConstantFP::get(VarType, 0.0), Alloca);
+            } else if (VarType->isIntegerTy(1)) {
+                Builder.CreateStore(ConstantInt::get(VarType, 0), Alloca);
+            }
+
+            NamedValues[VarName] = Alloca;
+            registerVariable(VarName, TypeStr, false);  // Register in symbol table
         }
-        
-        AllocaInst* Alloca = CreateEntryBlockAlloca(TheFunction, VarName, VarType);
-        
-        // Initialize to zero
-        if (VarType->isIntegerTy(32)) {
-            Builder.CreateStore(ConstantInt::get(VarType, 0), Alloca);
-        } else if (VarType->isFloatTy()) {
-            Builder.CreateStore(ConstantFP::get(VarType, 0.0), Alloca);
-        } else if (VarType->isIntegerTy(1)) {
-            Builder.CreateStore(ConstantInt::get(VarType, 0), Alloca);
-        }
-        
-        NamedValues[VarName] = Alloca;
-        registerVariable(VarName, TypeStr, false);  // Register in symbol table
     }
     
     // Generate code for statements
@@ -3851,6 +4302,300 @@ Value* GlobVarDeclAST::codegen() {
     
     DEBUG_CODEGEN("  Global variable created successfully");
     return GV;
+}
+
+/// ArrayDeclAST::codegen - Generate code for array declarations
+Value* ArrayDeclAST::codegen() {
+    DEBUG_CODEGEN("Generating array declaration: " + getName());
+
+    // Get base element type
+    llvm::Type* BaseType = getTypeFromString(Type);
+    if (!BaseType) {
+        return LogErrorV("Invalid type '" + Type + "' for array '" + getName() + "'");
+    }
+
+    // Build nested array type for multi-dimensional arrays
+    // For int[10][5], we create ArrayType::get(ArrayType::get(i32, 5), 10)
+    // This represents an array of 10 elements, where each element is an array of 5 ints
+    llvm::Type* FullArrayType = BaseType;
+    for (int i = Dimensions.size() - 1; i >= 0; i--) {
+        FullArrayType = llvm::ArrayType::get(FullArrayType, Dimensions[i]);
+        DEBUG_CODEGEN("  Creating array dimension [" + std::to_string(Dimensions[i]) + "]");
+    }
+
+    // Create type string for symbol table (e.g., "int[10][5]")
+    std::string TypeStr = Type;
+    for (size_t i = 0; i < Dimensions.size(); i++) {
+        TypeStr += "[" + std::to_string(Dimensions[i]) + "]";
+    }
+
+    if (IsGlobal) {
+        // Global array declaration
+        DEBUG_CODEGEN("  Creating global array with type: " + TypeStr);
+
+        // Initialize with zeros
+        Constant* InitVal = ConstantAggregateZero::get(FullArrayType);
+
+        GlobalVariable* GV = new GlobalVariable(
+            *TheModule,
+            FullArrayType,
+            false,  // not constant
+            GlobalValue::CommonLinkage,
+            InitVal,
+            getName()
+        );
+
+        GlobalValues[getName()] = GV;
+        registerVariable(getName(), TypeStr, true);
+
+        DEBUG_CODEGEN("  Global array created successfully");
+        return GV;
+    } else {
+        // Local array declaration
+        DEBUG_CODEGEN("  Creating local array with type: " + TypeStr);
+
+        if (!CurrentFunction) {
+            return LogErrorV("Array declaration outside of function");
+        }
+
+        // Allocate array on the stack
+        AllocaInst* Alloca = CreateEntryBlockAlloca(CurrentFunction, getName(), FullArrayType);
+
+        // Note: We don't initialize arrays to zero explicitly
+        // LLVM will handle proper allocation of the array type
+        // Initialization happens through explicit assignments in the code
+
+        NamedValues[getName()] = Alloca;
+        registerVariable(getName(), TypeStr, false);
+
+        DEBUG_CODEGEN("  Local array created successfully");
+        return Alloca;
+    }
+}
+
+/// ArrayAccessAST::codegen - Generate code for array access expressions
+Value* ArrayAccessAST::codegen() {
+    DEBUG_CODEGEN("Generating array access: " + getName());
+
+    // Look up the array in local scope first, then global scope
+    AllocaInst* ArrayAlloca = NamedValues[getName()];
+    GlobalVariable* ArrayGlobal = nullptr;
+    Value* ArrayPtr = nullptr;
+    Type* BaseType = nullptr;
+    bool isPointerParam = false;
+
+    if (ArrayAlloca) {
+        DEBUG_CODEGEN("  Found in local scope");
+        ArrayPtr = ArrayAlloca;
+        BaseType = ArrayAlloca->getAllocatedType();
+
+        // Check if this is a pointer parameter (for array parameters)
+        if (BaseType->isPointerTy()) {
+            DEBUG_CODEGEN("  Detected pointer parameter (array parameter)");
+            isPointerParam = true;
+            // Load the pointer value
+            ArrayPtr = Builder.CreateLoad(BaseType, ArrayAlloca, getName() + "_ptr");
+        }
+    } else {
+        ArrayGlobal = GlobalValues[getName()];
+        if (ArrayGlobal) {
+            DEBUG_CODEGEN("  Found in global scope");
+            ArrayPtr = ArrayGlobal;
+            BaseType = ArrayGlobal->getValueType();
+        } else {
+            return LogErrorV("Unknown array variable: " + getName());
+        }
+    }
+
+    // Generate code for all index expressions
+    std::vector<Value*> IndexValues;
+
+    if (!isPointerParam) {
+        // For regular arrays, first index is always 0 for array-to-pointer decay
+        IndexValues.push_back(ConstantInt::get(Type::getInt32Ty(TheContext), 0));
+    }
+
+    // Generate code for each subscript expression
+    for (size_t i = 0; i < Indices.size(); i++) {
+        Value* IndexVal = Indices[i]->codegen();
+        if (!IndexVal) {
+            return LogErrorV("Failed to generate code for array index");
+        }
+
+        // Ensure index is an integer (cast if necessary)
+        if (IndexVal->getType()->isFloatTy()) {
+            DEBUG_CODEGEN("  Converting float index to int");
+            IndexVal = Builder.CreateFPToSI(IndexVal, Type::getInt32Ty(TheContext), "floattoint");
+        } else if (IndexVal->getType()->isIntegerTy(1)) {
+            DEBUG_CODEGEN("  Converting bool index to int");
+            IndexVal = Builder.CreateZExt(IndexVal, Type::getInt32Ty(TheContext), "booltoint");
+        } else if (!IndexVal->getType()->isIntegerTy(32)) {
+            return LogErrorV("Array index must be an integer");
+        }
+
+        IndexValues.push_back(IndexVal);
+        DEBUG_CODEGEN("  Added index " + std::to_string(i));
+    }
+
+    // Determine element type and create GEP
+    Value* GEP = nullptr;
+    Type* ElementType;
+
+    if (isPointerParam && IndexValues.size() > 1) {
+        // Multi-dimensional array parameter - use chained GEPs
+        Value* CurrentPtr = ArrayPtr;
+        ElementType = Type::getFloatTy(TheContext); // Simplified: assume float for 2D
+
+        // Chain GEPs for each dimension
+        for (size_t i = 0; i < IndexValues.size(); i++) {
+            CurrentPtr = Builder.CreateGEP(ElementType, CurrentPtr, IndexValues[i],
+                                          "arrayidx" + std::to_string(i));
+        }
+        GEP = CurrentPtr;
+    } else if (isPointerParam) {
+        // Simple 1D array parameter
+        ElementType = Type::getInt32Ty(TheContext);
+        GEP = Builder.CreateGEP(ElementType, ArrayPtr, IndexValues, "arrayidx");
+    } else {
+        // Regular local/global array
+        Type* GEPType = BaseType;
+        ElementType = BaseType;
+        for (size_t i = 1; i < IndexValues.size(); i++) {
+            if (auto* ArrTy = dyn_cast<llvm::ArrayType>(ElementType)) {
+                ElementType = ArrTy->getElementType();
+            }
+        }
+        GEP = Builder.CreateGEP(GEPType, ArrayPtr, IndexValues, "arrayidx");
+    }
+
+    DEBUG_CODEGEN("  Created GEP");
+
+    // Load the value at the array element
+    Value* LoadedVal = Builder.CreateLoad(ElementType, GEP, "arrayelem");
+
+    DEBUG_CODEGEN("  Array access code generation completed");
+    return LoadedVal;
+}
+
+/// ArrayAssignmentExprAST::codegen - Generate code for array assignment expressions
+Value* ArrayAssignmentExprAST::codegen() {
+    DEBUG_CODEGEN("Generating array assignment to: " + LHS->getName());
+
+    // Generate code for the RHS value
+    Value* Val = RHS->codegen();
+    if (!Val) {
+        DEBUG_CODEGEN("  ERROR: Failed to generate RHS");
+        return nullptr;
+    }
+
+    // Look up the array (same as ArrayAccessAST but we need the pointer, not the loaded value)
+    AllocaInst* ArrayAlloca = NamedValues[LHS->getName()];
+    GlobalVariable* ArrayGlobal = nullptr;
+    Value* ArrayPtr = nullptr;
+    Type* BaseType = nullptr;
+    bool isPointerParam = false;
+
+    if (ArrayAlloca) {
+        DEBUG_CODEGEN("  Found in local scope");
+        ArrayPtr = ArrayAlloca;
+        BaseType = ArrayAlloca->getAllocatedType();
+
+        // Check if this is a pointer parameter (for array parameters)
+        if (BaseType->isPointerTy()) {
+            DEBUG_CODEGEN("  Detected pointer parameter (array parameter)");
+            isPointerParam = true;
+            // Load the pointer value
+            ArrayPtr = Builder.CreateLoad(BaseType, ArrayAlloca, LHS->getName() + "_ptr");
+        }
+    } else {
+        ArrayGlobal = GlobalValues[LHS->getName()];
+        if (ArrayGlobal) {
+            DEBUG_CODEGEN("  Found in global scope");
+            ArrayPtr = ArrayGlobal;
+            BaseType = ArrayGlobal->getValueType();
+        } else {
+            return LogErrorV("Unknown array variable: " + LHS->getName());
+        }
+    }
+
+    // Generate code for all index expressions
+    std::vector<Value*> IndexValues;
+
+    if (!isPointerParam) {
+        // First index is always 0 for array-to-pointer decay
+        IndexValues.push_back(ConstantInt::get(Type::getInt32Ty(TheContext), 0));
+    }
+
+    // Generate code for each subscript expression
+    for (size_t i = 0; i < LHS->getIndices().size(); i++) {
+        Value* IndexVal = LHS->getIndices()[i]->codegen();
+        if (!IndexVal) {
+            return LogErrorV("Failed to generate code for array index");
+        }
+
+        // Ensure index is an integer (cast if necessary)
+        if (IndexVal->getType()->isFloatTy()) {
+            DEBUG_CODEGEN("  Converting float index to int");
+            IndexVal = Builder.CreateFPToSI(IndexVal, Type::getInt32Ty(TheContext), "floattoint");
+        } else if (IndexVal->getType()->isIntegerTy(1)) {
+            DEBUG_CODEGEN("  Converting bool index to int");
+            IndexVal = Builder.CreateZExt(IndexVal, Type::getInt32Ty(TheContext), "booltoint");
+        } else if (!IndexVal->getType()->isIntegerTy(32)) {
+            return LogErrorV("Array index must be an integer");
+        }
+
+        IndexValues.push_back(IndexVal);
+        DEBUG_CODEGEN("  Added index " + std::to_string(i));
+    }
+
+    // Determine element type and create GEP
+    Value* GEP = nullptr;
+    Type* ElementType;
+
+    if (isPointerParam && IndexValues.size() > 1) {
+        // Multi-dimensional array parameter - use chained GEPs
+        Value* CurrentPtr = ArrayPtr;
+        ElementType = Type::getFloatTy(TheContext); // Simplified: assume float for 2D
+
+        // Chain GEPs for each dimension
+        for (size_t i = 0; i < IndexValues.size(); i++) {
+            CurrentPtr = Builder.CreateGEP(ElementType, CurrentPtr, IndexValues[i],
+                                          "arrayidx" + std::to_string(i));
+        }
+        GEP = CurrentPtr;
+    } else if (isPointerParam) {
+        // Simple 1D array parameter
+        ElementType = Type::getInt32Ty(TheContext);
+        GEP = Builder.CreateGEP(ElementType, ArrayPtr, IndexValues, "arrayidx");
+    } else {
+        // Regular local/global array
+        Type* GEPType = BaseType;
+        ElementType = BaseType;
+        for (size_t i = 1; i < IndexValues.size(); i++) {
+            if (auto* ArrTy = dyn_cast<llvm::ArrayType>(ElementType)) {
+                ElementType = ArrTy->getElementType();
+            }
+        }
+        GEP = Builder.CreateGEP(GEPType, ArrayPtr, IndexValues, "arrayidx");
+    }
+
+    DEBUG_CODEGEN("  Created GEP");
+
+    // Type check and cast if necessary
+    if (Val->getType() != ElementType) {
+        Value* CastedVal = castToType(Val, ElementType);
+        if (!CastedVal) {
+            return LogErrorV("Type mismatch in array assignment");
+        }
+        Val = CastedVal;
+        DEBUG_CODEGEN("  Type converted for assignment");
+    }
+
+    // Store the value to the array element
+    Builder.CreateStore(Val, GEP);
+
+    DEBUG_CODEGEN("  Array assignment successful");
+    return Val;
 }
 
 
