@@ -105,6 +105,7 @@ enum class DebugLevel {
 
 static DebugLevel CurrentDebugLevel = DebugLevel::NONE;
 
+// Initialize debug level from command line arguments
 static void initDebugLevel(int argc, char** argv) {
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
@@ -130,12 +131,14 @@ static void initDebugLevel(int argc, char** argv) {
     }
 }
 
+// Output user-level debug message
 static void DEBUG_USER(const std::string& msg) {
     if (CurrentDebugLevel >= DebugLevel::USER) {
         fprintf(stderr, "%s[USER]%s %s\n", COLOR_CYAN.c_str(), COLOR_RESET.c_str(), msg.c_str());
     }
 }
 
+// Output parser debug message with line/column
 static void DEBUG_PARSER(const std::string& msg, int line = -1, int col = -1) {
     if (CurrentDebugLevel >= DebugLevel::PARSER) {
         if (line >= 0) {
@@ -148,6 +151,7 @@ static void DEBUG_PARSER(const std::string& msg, int line = -1, int col = -1) {
     }
 }
 
+// Output code generation debug message
 static void DEBUG_CODEGEN(const std::string& msg) {
     if (CurrentDebugLevel >= DebugLevel::CODEGEN) {
         fprintf(stderr, "%s[CODEGEN]%s %s\n", 
@@ -164,6 +168,7 @@ static void DEBUG_VERBOSE(const std::string& msg) {
 
 static std::vector<std::string> ParserStack;
 
+// Track parser entry for debugging
 static void PARSER_ENTER(const std::string& function, const TOKEN& tok) {
     ParserStack.push_back(function);
     if (CurrentDebugLevel >= DebugLevel::PARSER) {
@@ -207,6 +212,7 @@ struct ParserContext {
 
 static ParserContext CurrentContext;
 
+// Display compilation phase progress
 static void ShowCompilationProgress() {
     if (CurrentDebugLevel >= DebugLevel::USER) {
         fprintf(stderr, "\n%s%s┌────────────────────────────────┐%s\n",
@@ -218,6 +224,7 @@ static void ShowCompilationProgress() {
     }
 }
 
+// Display phase completion message
 static void ShowPhaseComplete(const std::string& phase) {
     if (CurrentDebugLevel >= DebugLevel::USER) {
         fprintf(stderr, "%s✓%s %s complete\n", 
@@ -298,12 +305,14 @@ public:
 static std::vector<CompilerError> ErrorLog;
 static bool HasErrors = false;
 
+// Log compiler error with type, message, location
 static void LogCompilerError(ErrorType type, const std::string& msg, 
                              int line = -1, int col = -1, const std::string& context = "") {
     HasErrors = true;
     ErrorLog.emplace_back(type, msg, line, col, context);
 }
 
+// Print all accumulated compiler errors
 static void PrintAllErrors() {
     if (ErrorLog.empty()) return;
     
@@ -385,6 +394,7 @@ static TypeInfo* getTypeInfo(const std::string& varName) {
     return nullptr;
 }
 
+// Display symbol table for debugging
 static void DUMP_SYMBOL_TABLE() {
     if (CurrentDebugLevel >= DebugLevel::VERBOSE) {
         fprintf(stderr, "\n%s[SYMBOL TABLE DUMP]%s\n", 
@@ -588,6 +598,7 @@ const bool TOKEN::getBoolVal() const {
   return (lexeme == "true");
 }
 
+// Create and return TOKEN
 static TOKEN returnTok(std::string lexVal, int tok_type) {
   TOKEN return_tok;
   return_tok.lexeme = lexVal;
@@ -840,6 +851,7 @@ static TOKEN gettok() {
 static TOKEN CurTok;
 static std::deque<TOKEN> tok_buffer;
 
+// Get next token from buffer or lexer
 static TOKEN getNextToken() {
 
   if (tok_buffer.size() == 0)
@@ -851,8 +863,10 @@ static TOKEN getNextToken() {
   return CurTok = temp;
 }
 
+// Return token to buffer for re-parsing
 static void putBackToken(TOKEN tok) { tok_buffer.push_front(tok); }
 
+// Look ahead at token without consuming
 static TOKEN peekToken(int offset = 0) {
   // Ensure we have enough tokens in the buffer
   while (tok_buffer.size() <= static_cast<size_t>(offset)) {
@@ -1473,27 +1487,32 @@ static std::unique_ptr<ASTnode> LogError(TOKEN tok, const char *Str) {
     return nullptr;
 }
 
+// Log parser error with message
 static std::unique_ptr<ASTnode> LogError(const char *Str) {
     LogCompilerError(ErrorType::SYNTAX, Str, lineNo, columnNo);
     return nullptr;
 }
 
+// Log prototype error
 static std::unique_ptr<FunctionPrototypeAST> LogErrorP(TOKEN tok, const char *Str) {
     LogCompilerError(ErrorType::SYNTAX, Str, tok.lineNo, tok.columnNo,
                      "Token: '" + tok.lexeme + "'");
     return nullptr;
 }
 
+// Log codegen error
 static Value* LogErrorV(const char *Str) {
     LogCompilerError(ErrorType::SEMANTIC_OTHER, Str);
     return nullptr;
 }
 
+// Log codegen error (string)
 static Value* LogErrorV(const std::string& Str) {
     LogCompilerError(ErrorType::SEMANTIC_OTHER, Str);
     return nullptr;
 }
 
+// Log type mismatch error
 static Value* LogTypeError(const std::string& msg, Type* expected, Type* actual) {
     std::string fullMsg = msg + "\n  Expected: " + 
                          getTypeName(expected) + 
@@ -1503,12 +1522,14 @@ static Value* LogTypeError(const std::string& msg, Type* expected, Type* actual)
     return nullptr;
 }
 
+// Log scope/variable not found error
 static Value* LogScopeError(const std::string& varName, const std::string& context = "") {
     std::string msg = "Undefined variable '" + varName + "'";
     LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg, -1, -1, context);
     return nullptr;
 }
 
+// Log function-related error
 static Function* LogErrorF(const char *Str) {
     LogCompilerError(ErrorType::SEMANTIC_OTHER, Str);
     return nullptr;
@@ -1762,12 +1783,15 @@ public:
 static std::unique_ptr<ASTnode> ParseDecl();
 static std::unique_ptr<ASTnode> ParseStmt();
 static std::unique_ptr<ASTnode> ParseBlock();
+// Parse complete expression (top-level)
 static std::unique_ptr<ASTnode> ParseExper();
+// Parse function parameter
 static std::unique_ptr<ParamAST> ParseParam();
 static std::unique_ptr<DeclAST> ParseLocalDecl();
 static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime();
 
 // element ::= FLOAT_LIT
+// Parse floating point literal
 static std::unique_ptr<ASTnode> ParseFloatNumberExpr() {
   auto Result = std::make_unique<FloatASTnode>(CurTok, CurTok.getFloatVal());
   getNextToken(); // consume the number
@@ -1775,6 +1799,7 @@ static std::unique_ptr<ASTnode> ParseFloatNumberExpr() {
 }
 
 // element ::= INT_LIT
+// Parse integer literal
 static std::unique_ptr<ASTnode> ParseIntNumberExpr() {
   auto Result = std::make_unique<IntASTnode>(CurTok, CurTok.getIntVal());
   getNextToken(); // consume the number
@@ -1782,6 +1807,7 @@ static std::unique_ptr<ASTnode> ParseIntNumberExpr() {
 }
 
 // element ::= BOOL_LIT
+// Parse boolean literal
 static std::unique_ptr<ASTnode> ParseBoolExpr() {
   auto Result = std::make_unique<BoolASTnode>(CurTok, CurTok.getBoolVal());
   getNextToken(); // consume the number
@@ -1817,6 +1843,7 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
 
 
 // param ::= var_type IDENT ["[" INT_LIT "]"]*
+// Parse function parameter
 static std::unique_ptr<ParamAST> ParseParam() {
   std::string Type = CurTok.lexeme; // keep track of the type of the param
   getNextToken();                   // eat the type token
@@ -1923,6 +1950,7 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParams() {
 //===----------------------------------------------------------------------===//
 
 // array_dims_cont2 ::= "[" INT_LIT "]" | ε
+// Parse third array dimension [n]
 static bool ParseArrayDimsCont2(std::vector<int> &dimensions) {
   if (CurTok.type == LBOX) {
     getNextToken(); // eat '['
@@ -1960,6 +1988,7 @@ static bool ParseArrayDimsCont2(std::vector<int> &dimensions) {
 }
 
 // array_dims_cont ::= "[" INT_LIT "]" array_dims_cont2 | ε
+// Parse second array dimension [m][n]
 static bool ParseArrayDimsCont(std::vector<int> &dimensions) {
   if (CurTok.type == LBOX) {
     getNextToken(); // eat '['
@@ -1992,6 +2021,7 @@ static bool ParseArrayDimsCont(std::vector<int> &dimensions) {
 }
 
 // array_access_cont2 ::= "[" expr "]" | ε
+// Parse third array subscript [k]
 static bool ParseArrayAccessCont2(std::vector<std::unique_ptr<ASTnode>> &indices) {
   if (CurTok.type == LBOX) {
     getNextToken(); // eat '['
@@ -2022,6 +2052,7 @@ static bool ParseArrayAccessCont2(std::vector<std::unique_ptr<ASTnode>> &indices
 }
 
 // array_access_cont ::= "[" expr "]" array_access_cont2 | ε
+// Parse second and third subscripts [j][k]
 static bool ParseArrayAccessCont(std::vector<std::unique_ptr<ASTnode>> &indices) {
   if (CurTok.type == LBOX) {
     getNextToken(); // eat '['
@@ -2047,6 +2078,7 @@ static bool ParseArrayAccessCont(std::vector<std::unique_ptr<ASTnode>> &indices)
 }
 
 // array_access ::= "[" expr "]" array_access_cont
+// Parse array subscript expression arr[i][j][k]
 static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &arrayName) {
   std::vector<std::unique_ptr<ASTnode>> indices;
 
@@ -2531,6 +2563,7 @@ static std::unique_ptr<ASTnode> ParseElseStmt() {
 }
 
 // if_stmt ::= "if" "(" expr ")" block else_stmt
+// Parse if statement with optional else
 static std::unique_ptr<ASTnode> ParseIfStmt() {
   getNextToken(); // eat the if.
   if (CurTok.type == LPAR) {
@@ -2590,6 +2623,7 @@ static std::unique_ptr<ASTnode> ParseReturnStmt() {
 }
 
 // while_stmt ::= "while" "(" expr ")" stmt
+// Parse while loop statement
 static std::unique_ptr<ASTnode> ParseWhileStmt() {
 
   getNextToken(); // eat the while.
