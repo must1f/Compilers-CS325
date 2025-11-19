@@ -3171,6 +3171,52 @@ static AllocaInst* CreateEntryBlockAlloca(Function *TheFunction,
     return TmpB.CreateAlloca(VarType, nullptr, VarName);
 }
 
+/// getElementTypeFromParamType - Extract element type from array parameter type string
+/// For "int*" or "int*[10]" returns Type::getInt32Ty()
+/// For "float*" or "float*[10]" returns Type::getFloatTy()
+static Type* getElementTypeFromParamType(const std::string& paramTypeStr) {
+    if (paramTypeStr.find("float") != std::string::npos) {
+        return Type::getFloatTy(TheContext);
+    } else if (paramTypeStr.find("int") != std::string::npos) {
+        return Type::getInt32Ty(TheContext);
+    } else if (paramTypeStr.find("bool") != std::string::npos) {
+        return Type::getInt1Ty(TheContext);
+    }
+    // Default to int if unclear
+    return Type::getInt32Ty(TheContext);
+}
+
+/// extractInnerDimensionFromParamType - Extract inner dimension from 2D array parameter
+/// For "float*[10]" returns 10, for "int*[5]" returns 5
+/// Returns -1 if no dimension found (1D array parameter)
+static int extractInnerDimensionFromParamType(const std::string& paramTypeStr) {
+    size_t lbracket = paramTypeStr.find('[');
+    size_t rbracket = paramTypeStr.find(']');
+
+    if (lbracket != std::string::npos && rbracket != std::string::npos) {
+        std::string dimStr = paramTypeStr.substr(lbracket + 1, rbracket - lbracket - 1);
+        try {
+            return std::stoi(dimStr);
+        } catch (...) {
+            return -1;
+        }
+    }
+    return -1;
+}
+
+/// getArrayTypeForParam - Create the proper array type for a 2D array parameter
+/// For "float*[10]" returns [10 x float]
+/// For "int*[5]" returns [5 x i32]
+static Type* getArrayTypeForParam(const std::string& paramTypeStr) {
+    Type* elementType = getElementTypeFromParamType(paramTypeStr);
+    int innerDim = extractInnerDimensionFromParamType(paramTypeStr);
+
+    if (innerDim > 0) {
+        return llvm::ArrayType::get(elementType, innerDim);
+    }
+    return elementType;
+}
+
 
 //===----------------------------------------------------------------------===//
 // Code Generation - AST Node Implementations
@@ -4444,17 +4490,27 @@ Value* ArrayAccessAST::codegen() {
     if (isPointerParam && IndexValues.size() > 1) {
         // Multi-dimensional array parameter - use chained GEPs
         Value* CurrentPtr = ArrayPtr;
-        ElementType = Type::getFloatTy(TheContext); // Simplified: assume float for 2D
+
+        // Extract types from parameter type string stored in VariableTypes
+        std::string paramTypeStr = VariableTypes[getName()];
+        ElementType = getElementTypeFromParamType(paramTypeStr);
+        Type* ArrayTypeForGEP = getArrayTypeForParam(paramTypeStr);
+        DEBUG_CODEGEN("  Multi-dim array param element type: " + paramTypeStr);
 
         // Chain GEPs for each dimension
+        // First GEP uses the array type (e.g., [10 x float])
+        // Subsequent GEPs use the element type
         for (size_t i = 0; i < IndexValues.size(); i++) {
-            CurrentPtr = Builder.CreateGEP(ElementType, CurrentPtr, IndexValues[i],
+            Type* GEPType = (i == 0) ? ArrayTypeForGEP : ElementType;
+            CurrentPtr = Builder.CreateGEP(GEPType, CurrentPtr, IndexValues[i],
                                           "arrayidx" + std::to_string(i));
         }
         GEP = CurrentPtr;
     } else if (isPointerParam) {
         // Simple 1D array parameter
-        ElementType = Type::getInt32Ty(TheContext);
+        std::string paramTypeStr = VariableTypes[getName()];
+        ElementType = getElementTypeFromParamType(paramTypeStr);
+        DEBUG_CODEGEN("  1D array param element type: " + paramTypeStr);
         GEP = Builder.CreateGEP(ElementType, ArrayPtr, IndexValues, "arrayidx");
     } else {
         // Regular local/global array
@@ -4555,17 +4611,23 @@ Value* ArrayAssignmentExprAST::codegen() {
     if (isPointerParam && IndexValues.size() > 1) {
         // Multi-dimensional array parameter - use chained GEPs
         Value* CurrentPtr = ArrayPtr;
-        ElementType = Type::getFloatTy(TheContext); // Simplified: assume float for 2D
+        std::string paramTypeStr = VariableTypes[LHS->getName()];
+        ElementType = getElementTypeFromParamType(paramTypeStr);
+        Type* ArrayTypeForGEP = getArrayTypeForParam(paramTypeStr);
 
         // Chain GEPs for each dimension
+        // First GEP uses the array type (e.g., [10 x float])
+        // Subsequent GEPs use the element type
         for (size_t i = 0; i < IndexValues.size(); i++) {
-            CurrentPtr = Builder.CreateGEP(ElementType, CurrentPtr, IndexValues[i],
+            Type* GEPType = (i == 0) ? ArrayTypeForGEP : ElementType;
+            CurrentPtr = Builder.CreateGEP(GEPType, CurrentPtr, IndexValues[i],
                                           "arrayidx" + std::to_string(i));
         }
         GEP = CurrentPtr;
     } else if (isPointerParam) {
         // Simple 1D array parameter
-        ElementType = Type::getInt32Ty(TheContext);
+        std::string paramTypeStr = VariableTypes[LHS->getName()];
+        ElementType = getElementTypeFromParamType(paramTypeStr);
         GEP = Builder.CreateGEP(ElementType, ArrayPtr, IndexValues, "arrayidx");
     } else {
         // Regular local/global array
