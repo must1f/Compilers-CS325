@@ -849,7 +849,7 @@ static std::deque<TOKEN> tok_buffer;
 static TOKEN getNextToken() {
 
   if (tok_buffer.size() == 0)
-    tok_buffer.push_back(gettok());
+    tok_buffer.emplace_back(gettok());
 
   TOKEN temp = tok_buffer.front();
   tok_buffer.pop_front();
@@ -864,7 +864,7 @@ static void putBackToken(TOKEN tok) { tok_buffer.push_front(tok); }
 static TOKEN peekToken(int offset = 0) {
   // Ensure we have enough tokens in the buffer
   while (tok_buffer.size() <= static_cast<size_t>(offset)) {
-    tok_buffer.push_back(gettok());
+    tok_buffer.emplace_back(gettok());
   }
   return tok_buffer[offset];
 }
@@ -1809,7 +1809,7 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamListPrime() {
     auto param = ParseParam();
     if (param) {
       printf("found param in param_list_prime: %s\n", param->getName().c_str());
-      param_list.push_back(std::move(param));
+      param_list.emplace_back(std::move(param));
       auto param_list_prime = ParseParamListPrime();
       for (unsigned i = 0; i < param_list_prime.size(); i++) {
         param_list.push_back(std::move(param_list_prime.at(i)));
@@ -1881,7 +1881,7 @@ static std::vector<std::unique_ptr<ParamAST>> ParseParamList() {
 
   auto param = ParseParam();
   if (param) {
-    param_list.push_back(std::move(param));
+    param_list.emplace_back(std::move(param));
     auto param_list_prime = ParseParamListPrime();
     for (unsigned i = 0; i < param_list_prime.size(); i++) {
       param_list.push_back(std::move(param_list_prime.at(i)));
@@ -2014,7 +2014,7 @@ static bool ParseArrayAccessCont2(std::vector<std::unique_ptr<ASTnode>> &indices
       return false;
     }
 
-    indices.push_back(std::move(index));
+    indices.emplace_back(std::move(index));
 
     if (CurTok.type != RBOX) {
       LogError(CurTok, "expected ']' after array index");
@@ -2045,7 +2045,7 @@ static bool ParseArrayAccessCont(std::vector<std::unique_ptr<ASTnode>> &indices)
       return false;
     }
 
-    indices.push_back(std::move(index));
+    indices.emplace_back(std::move(index));
 
     if (CurTok.type != RBOX) {
       LogError(CurTok, "expected ']' after array index");
@@ -2077,7 +2077,7 @@ static std::unique_ptr<ArrayAccessAST> ParseArrayAccess(const std::string &array
     return nullptr;
   }
 
-  indices.push_back(std::move(index));
+  indices.emplace_back(std::move(index));
 
   if (CurTok.type != RBOX) {
     LogError(CurTok, "expected ']' after array index");
@@ -2133,7 +2133,7 @@ static std::unique_ptr<ASTnode> ParseFunctionCall(const std::string &callee, TOK
   auto arg = ParseExper();
   if (!arg)
     return nullptr;
-  args.push_back(std::move(arg));
+  args.emplace_back(std::move(arg));
 
   // Parse remaining arguments (if any)
   while (CurTok.type == COMMA) {
@@ -2143,7 +2143,7 @@ static std::unique_ptr<ASTnode> ParseFunctionCall(const std::string &callee, TOK
     if (!arg)
       return nullptr;
 
-    args.push_back(std::move(arg));
+    args.emplace_back(std::move(arg));
   }
 
   return std::make_unique<CallExprAST>(callee, std::move(args));
@@ -2673,7 +2673,7 @@ static std::vector<std::unique_ptr<ASTnode>> ParseStmtList() {
   std::vector<std::unique_ptr<ASTnode>> stmt_list; // vector of statements
   auto stmt = ParseStmt();
   if (stmt) {
-    stmt_list.push_back(std::move(stmt));
+    stmt_list.emplace_back(std::move(stmt));
   }
   auto stmt_list_prime = ParseStmtListPrime();
   for (unsigned i = 0; i < stmt_list_prime.size(); i++) {
@@ -2694,7 +2694,7 @@ static std::vector<std::unique_ptr<ASTnode>> ParseStmtListPrime() {
     // expand by stmt_list ::= stmt stmt_list_prime
     auto stmt = ParseStmt();
     if (stmt) {
-      stmt_list.push_back(std::move(stmt));
+      stmt_list.emplace_back(std::move(stmt));
     }
     auto stmt_prime = ParseStmtListPrime();
     for (unsigned i = 0; i < stmt_prime.size(); i++) {
@@ -2719,7 +2719,7 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDeclsPrime() {
       CurTok.type == BOOL_TOK) { // FIRST(local_decl)
     auto local_decl = ParseLocalDecl();
     if (local_decl) {
-      local_decls_prime.push_back(std::move(local_decl));
+      local_decls_prime.emplace_back(std::move(local_decl));
     }
     auto prime = ParseLocalDeclsPrime();
     for (unsigned i = 0; i < prime.size(); i++) {
@@ -2835,7 +2835,7 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDecls() {
 
     auto local_decl = ParseLocalDecl();
     if (local_decl) {
-      local_decls.push_back(std::move(local_decl));
+      local_decls.emplace_back(std::move(local_decl));
     }
     auto local_decls_prime = ParseLocalDeclsPrime();
     for (unsigned i = 0; i < local_decls_prime.size(); i++) {
