@@ -45,6 +45,7 @@ static std::map<std::string, AllocaInst*> NamedValues;
 static std::map<std::string, GlobalVariable*> GlobalValues;
 static std::map<std::string, std::string> VariableTypes;
 static Function *CurrentFunction = nullptr;
+static std::set<std::string> CurrentFunctionParams; // Track current function's parameter names
 
 // Source line cache for better error reporting (forward declarations)
 static std::vector<std::string> SourceLines;
@@ -853,6 +854,7 @@ public:
   virtual Value *codegen() { return nullptr; };
   virtual std::string to_string() const { return ""; };
   virtual bool isArrayAccess() const { return false; }
+  virtual bool isAssignment() const { return false; } // Check if node is an assignment
 };
 
 // integer literals like 1, 2, 10
@@ -1206,6 +1208,7 @@ public:
   std::unique_ptr<ASTnode> &getRHS() { return RHS; }
 
   virtual Value* codegen() override;
+  virtual bool isAssignment() const override { return true; } // Mark as assignment
 
   virtual std::string to_string() const override {
     std::string result = std::string(COLOR_MAGENTA) + "ArrayAssignmentExpr" + std::string(COLOR_RESET) + "\n";
@@ -1664,6 +1667,7 @@ public:
   std::unique_ptr<ASTnode> &getRHS() { return RHS; }
 
   virtual Value* codegen() override;
+  virtual bool isAssignment() const override { return true; } // Mark as assignment
 
   virtual std::string to_string() const override {
   std::string result = std::string(COLOR_MAGENTA) + "AssignmentExpr" + std::string(COLOR_RESET) + "\n";
@@ -2304,12 +2308,14 @@ static std::unique_ptr<ASTnode> ParseExper() {
 }
 
 // expr_stmt ::= expr ";"
-//            |  ";"
+// Note: Empty statements (just ";") are NOT allowed in this teaching compiler
 static std::unique_ptr<ASTnode> ParseExperStmt() {
 
-  if (CurTok.type == SC) { // empty statement
-    getNextToken();        // eat ;
-    return nullptr;
+  if (CurTok.type == SC) { // Reject empty statement - stricter than standard C
+    // We need to consume the semicolon before returning error to avoid infinite loop
+    TOKEN errorTok = CurTok;
+    getNextToken(); // eat the semicolon
+    return LogError(errorTok, "unexpected semicolon - empty statements are not allowed");
   } else {
     auto expr = ParseExper();
     if (expr) {
@@ -2370,6 +2376,12 @@ static std::unique_ptr<ASTnode> ParseIfStmt() {
     auto Cond = ParseExper();
     if (!Cond)
       return nullptr;
+    
+    // Check if condition is an assignment (stricter than C - for teaching purposes)
+    if (Cond->isAssignment()) {
+      return LogError(CurTok, "assignment in condition is not allowed - use comparison (==) instead");
+    }
+    
     if (CurTok.type != RPAR)
       return LogError(CurTok, "expected )");
     getNextToken(); // eat )
@@ -2431,6 +2443,12 @@ static std::unique_ptr<ASTnode> ParseWhileStmt() {
     auto Cond = ParseExper();
     if (!Cond)
       return nullptr;
+    
+    // Check if condition is an assignment (stricter than C - for teaching purposes)
+    if (Cond->isAssignment()) {
+      return LogError(CurTok, "assignment in condition is not allowed - use comparison (==) instead");
+    }
+    
     if (CurTok.type != RPAR)
       return LogError(CurTok, "expected )");
     getNextToken(); // eat )
@@ -3051,6 +3069,22 @@ static int extractInnerDimensionFromParamType(const std::string& paramTypeStr) {
     return -1;
 }
 
+// countArrayDimensions - Count number of dimensions in an array type string
+// For "int[10]" returns 1, for "int[10][5]" returns 2, for "int[10][5][3]" returns 3
+// For "int*" returns 1 (pointer parameter), for "int*[10]" returns 2
+// Returns 0 for non-array types
+static int countArrayDimensions(const std::string& typeStr) {
+    int count = 0;
+    for (char c : typeStr) {
+        if (c == '[') count++;
+    }
+    // Check if it's a pointer parameter (e.g., "int*" or "float*[10]")
+    if (typeStr.find('*') != std::string::npos) {
+        count++; // Pointer parameter adds one dimension
+    }
+    return count;
+}
+
 // getArrayTypeForParam - Create the proper array type for a 2D array parameter
 // For "float*[10]" returns [10 x float]
 // For "int*[5]" returns [5 x i32]
@@ -3469,6 +3503,20 @@ Value* BinaryExprAST::codegen() {
                            "LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
             return nullptr;
         }
+        
+        // Check for incompatible types: mixing int and float is not allowed
+        bool leftIsFloat = OrigLTy->isFloatTy() || OrigLTy->isDoubleTy();
+        bool rightIsFloat = OrigRTy->isFloatTy() || OrigRTy->isDoubleTy();
+        bool leftIsInt = OrigLTy->isIntegerTy(32);
+        bool rightIsInt = OrigRTy->isIntegerTy(32);
+        
+        if ((leftIsFloat && rightIsInt) || (leftIsInt && rightIsFloat)) {
+            LogCompilerError(ErrorType::SEMANTIC_TYPE,
+                           "Binary operator '" + Op + "' requires operands of the same type",
+                           -1, -1,
+                           "Cannot mix int and float. LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
+            return nullptr;
+        }
     }
 
     promoteTypes(L, R);
@@ -3521,6 +3569,27 @@ Value* BinaryExprAST::codegen() {
 
     if (Op == "/") {
         DEBUG_CODEGEN("  Creating division");
+        
+        // Check for division by zero with constant values
+        if (auto* CI = dyn_cast<ConstantInt>(R)) {
+            if (CI->isZero()) {
+                LogCompilerError(ErrorType::SEMANTIC_OTHER,
+                               "Division by zero detected",
+                               -1, -1,
+                               "Constant zero divisor is not allowed");
+                return nullptr;
+            }
+        }
+        if (auto* CF = dyn_cast<ConstantFP>(R)) {
+            if (CF->isZero()) {
+                LogCompilerError(ErrorType::SEMANTIC_OTHER,
+                               "Division by zero detected",
+                               -1, -1,
+                               "Constant zero divisor is not allowed");
+                return nullptr;
+            }
+        }
+        
         if (OpType->isFloatingPointTy())
             return Builder.CreateFDiv(L, R, "fdiv");
         else if (OpType->isIntegerTy())
@@ -3535,6 +3604,18 @@ Value* BinaryExprAST::codegen() {
 
     if (Op == "%") {
         DEBUG_CODEGEN("  Creating modulo");
+        
+        // Check for modulo by zero with constant values
+        if (auto* CI = dyn_cast<ConstantInt>(R)) {
+            if (CI->isZero()) {
+                LogCompilerError(ErrorType::SEMANTIC_OTHER,
+                               "Modulo by zero detected",
+                               -1, -1,
+                               "Constant zero divisor is not allowed");
+                return nullptr;
+            }
+        }
+        
         if (OpType->isIntegerTy())
             return Builder.CreateSRem(L, R, "mod");
         else {
@@ -3999,11 +4080,19 @@ Value* BlockAST::codegen() {
         }
         CurrentBlockVars.insert(VarName);
 
+        // Check if shadowing a function parameter (NOT allowed)
+        if (CurrentFunctionParams.find(VarName) != CurrentFunctionParams.end()) {
+            LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                           "Local variable '" + VarName + "' shadows function parameter",
+                           CurTok.lineNo, CurTok.columnNo);
+            return nullptr;
+        }
+
         // Check if shadowing a global variable (allowed)
         if (GlobalValues.find(VarName) != GlobalValues.end()) {
             DEBUG_CODEGEN("    Shadowing global variable '" + VarName + "'");
         }
-
+        
         // Save old binding if variable already exists in outer scope (shadowing allowed)
         if (NamedValues[VarName]) {
             OldBindings[VarName] = NamedValues[VarName];
@@ -4020,6 +4109,16 @@ Value* BlockAST::codegen() {
         } else {
             // Simple variable declaration
             DEBUG_CODEGEN("    Processing as simple variable declaration");
+            
+            // Check if name collides with a function
+            if (TheModule->getFunction(VarName)) {
+                LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                               "Variable '" + VarName + "' conflicts with function name",
+                               CurTok.lineNo, CurTok.columnNo,
+                               "Cannot use function name as variable name");
+                return nullptr;
+            }
+            
             Type* VarType = getTypeFromString(TypeStr);
             if (!VarType) {
                 LogCompilerError(ErrorType::SEMANTIC_TYPE,
@@ -4105,6 +4204,7 @@ Value* FunctionDeclAST::codegen() {
 
     // Clear variable scope
     NamedValues.clear();
+    CurrentFunctionParams.clear(); // Clear parameter names from previous function
 
     // Check for duplicate parameter names
     std::set<std::string> ParamNames;
@@ -4118,6 +4218,7 @@ Value* FunctionDeclAST::codegen() {
             return nullptr;
         }
         ParamNames.insert(ParamName);
+        CurrentFunctionParams.insert(ParamName); // Track parameter names
     }
 
     // Create allocas for parameters
@@ -4215,6 +4316,15 @@ Value* GlobVarDeclAST::codegen() {
         LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg);
         return nullptr;
     }
+    
+    // Check if name collides with a function
+    if (TheModule->getFunction(getName())) {
+        LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                       "Global variable '" + getName() + "' conflicts with function name",
+                       -1, -1,
+                       "Cannot use function name as variable name");
+        return nullptr;
+    }
 
     llvm::Type* VarType = getTypeFromString(getType());
     if (!VarType) {
@@ -4273,6 +4383,15 @@ Value* ArrayDeclAST::codegen() {
     std::string TypeStr = Type;
     for (size_t i = 0; i < Dimensions.size(); i++) {
         TypeStr += "[" + std::to_string(Dimensions[i]) + "]";
+    }
+    
+    // Check if name collides with a function
+    if (TheModule->getFunction(getName())) {
+        LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                       "Array '" + getName() + "' conflicts with function name",
+                       -1, -1,
+                       "Cannot use function name as array name");
+        return nullptr;
     }
 
     if (IsGlobal) {
@@ -4368,6 +4487,22 @@ Value* ArrayAccessAST::codegen() {
             }
         } else {
             return LogErrorV("Unknown array variable: " + getName());
+        }
+    }
+
+    // Validate array dimensions match the number of indices
+    TypeInfo* typeInfo = getTypeInfo(getName());
+    if (typeInfo) {
+        int expectedDims = countArrayDimensions(typeInfo->typeName);
+        int actualIndices = Indices.size();
+        
+        if (expectedDims > 0 && actualIndices != expectedDims) {
+            std::string msg = "Array dimension mismatch for '" + getName() + "': ";
+            msg += "array has " + std::to_string(expectedDims) + " dimension(s), ";
+            msg += "but accessed with " + std::to_string(actualIndices) + " index/indices";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "Array type: " + typeInfo->typeName);
+            return nullptr;
         }
     }
 
