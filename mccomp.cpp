@@ -4814,22 +4814,6 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Parsing Finished\n");
     }
     ShowPhaseComplete("Parsing");
-    
-    // Check if main function exists
-    if (!TheModule->getFunction("main")) {
-        LogCompilerError(ErrorType::SEMANTIC_OTHER,
-                       "Program must have a 'main' function",
-                       -1, -1,
-                       "Entry point 'main' is required");
-        HasErrors = true;
-    }
-    
-    if (HasErrors) {
-        PrintAllErrors();
-        fclose(pFile);
-        return 1;
-    }
-    
     DEBUG_USER("Starting code generation...");
 
     printf("********************* FINAL IR (begin) ****************************\n");
