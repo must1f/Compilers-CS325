@@ -1,0 +1,29 @@
+[0;34m========================================[0m
+[0;34mIR Pattern Verification[0m
+[0;34m========================================[0m
+
+[0;34mVerifying Valid Reference Tests...[0m
+[0;32m[PASS][0m int_to_float_assign - All IR patterns present
+[0;32m[PASS][0m arg_widening - All IR patterns present
+[1;33m[WARNING][0m comparison_to_bool - Missing pattern: icmp
+[1;33m[PARTIAL][0m comparison_to_bool - Some patterns missing
+[1;33m[WARNING][0m all_widening - Missing pattern: zext
+[1;33m[PARTIAL][0m all_widening - Some patterns missing
+[0;32m[PASS][0m array_operations - All IR patterns present
+[0;32m[PASS][0m proper_function_calls - All IR patterns present
+
+[0;34mVerifying Lecturer Reference Tests...[0m
+[0;32m[PASS][0m addition - Valid IR generated
+[0;32m[PASS][0m factorial - Valid IR generated
+[0;32m[PASS][0m fibonacci - Valid IR generated
+[0;32m[PASS][0m void - Valid IR generated
+[0;32m[PASS][0m while - Valid IR generated
+
+[0;34m========================================[0m
+[0;34mIR Verification Summary[0m
+[0;34m========================================[0m
+Total IR tests: 11
+[0;32mPassed: 9[0m
+[0;31mFailed: 2[0m
+
+IR generation success rate: 81%

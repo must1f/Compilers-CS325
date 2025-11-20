@@ -1,0 +1,42 @@
+[0;34m========================================[0m
+[0;34mError Message Quality Assessment[0m
+[0;34m========================================[0m
+
+[0;34mTesting undefined variable error quality...[0m
+  [0;32m✓[0m undefined_var has line number
+  [0;32m✓[0m undefined_var shows error type
+  [0;32m✓[0m undefined_var mentions variable/identifier name
+  [1;33m~[0m undefined_var no color coding
+
+[0;34mTesting type error message quality...[0m
+  [0;31m✗[0m type_error missing line number
+  [0;31m✗[0m type_error missing error type label
+  [0;32m✓[0m type_error provides context
+  [1;33m~[0m type_error no color coding
+
+[0;34mTesting syntax error message quality...[0m
+  [0;32m✓[0m syntax_error has line number
+  [0;32m✓[0m syntax_error shows error type
+  [1;33m~[0m syntax_error no color coding
+
+[0;34mChecking negative test suite error messages...[0m
+  Checking missing_semicolon...
+  [0;32m✓[0m missing_semicolon has line number
+  [0;32m✓[0m missing_semicolon shows error type
+  Checking float_to_int_assign...
+  [0;31m✗[0m float_to_int_assign missing line number
+  [0;31m✗[0m float_to_int_assign missing error type label
+  Checking undefined_variable...
+  [0;32m✓[0m undefined_variable has line number
+  [0;32m✓[0m undefined_variable shows error type
+
+[0;34m========================================[0m
+[0;34mError Message Quality Summary[0m
+[0;34m========================================[0m
+Total quality checks: 17
+[0;32mPassed: 10[0m
+[0;31mFailed: 7[0m
+
+Error message quality score: 58%
+
+[0;31mError messages need improvement[0m

@@ -1,0 +1,129 @@
+[0;34m========================================[0m
+[0;34mMiniC Compiler Negative Test Suite[0m
+[0;34m========================================[0m
+
+[0;34mTesting Syntax Errors...[0m
+[0;32m[PASS][0m array_no_size - Correctly rejected with Syntax Error
+[0;31m[FAIL][0m assign_in_condition - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m double_operator - Rejected but expected 'Syntax Error', got: 
+[0;31m[FAIL][0m double_semicolon - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m else_without_if - Rejected but expected 'Syntax Error', got: 
+[0;32m[PASS][0m if_no_condition - Correctly rejected with Syntax Error
+[0;32m[PASS][0m incomplete_array_access - Correctly rejected with Syntax Error
+[0;32m[PASS][0m incomplete_expr - Correctly rejected with Syntax Error
+[0;32m[PASS][0m incomplete_function - Correctly rejected with Syntax Error
+[0;32m[PASS][0m invalid_assignment - Correctly rejected with Syntax Error
+[1;33m[PARTIAL][0m invalid_return_statement - Rejected but expected 'Syntax Error', got: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+[0;32m[PASS][0m missing_brace - Correctly rejected with Syntax Error
+[0;32m[PASS][0m missing_comma_params - Correctly rejected with Syntax Error
+[0;32m[PASS][0m missing_param_type - Correctly rejected with Syntax Error
+[0;32m[PASS][0m missing_paren - Correctly rejected with Syntax Error
+[0;32m[PASS][0m missing_return_type - Correctly rejected with Syntax Error
+[0;32m[PASS][0m missing_semicolon - Correctly rejected with Syntax Error
+[0;32m[PASS][0m nested_function - Correctly rejected with Syntax Error
+[0;32m[PASS][0m unclosed_paren - Correctly rejected with Syntax Error
+[0;32m[PASS][0m unmatched_braces - Correctly rejected with Syntax Error
+[0;32m[PASS][0m void_variable - Correctly rejected with Syntax Error
+[0;32m[PASS][0m while_no_condition - Correctly rejected with Syntax Error
+
+[0;34mTesting Semantic Type Errors...[0m
+[0;31m[FAIL][0m arithmetic_on_bool - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m array_4d - Rejected but expected 'Type Error\|Semantic Error', got: [1m[31m║  Compilation Failed - 4 Error(s) Found               ║[0m
+[0;31m[FAIL][0m array_float_index - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m array_negative_size - Rejected but expected 'Type Error\|Semantic Error', got: [1m[31m║  Compilation Failed - 3 Error(s) Found               ║[0m
+[0;31m[FAIL][0m array_wrong_dimensions - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m array_zero_size - Rejected but expected 'Type Error\|Semantic Error', got: [1m[31m║  Compilation Failed - 3 Error(s) Found               ║[0m
+[0;31m[FAIL][0m bool_to_int_assign - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m call_non_function - Rejected but expected 'Type Error\|Semantic Error', got: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+[0;31m[FAIL][0m comparison_to_int - Compiler accepted invalid code!
+[0;31m[FAIL][0m division_by_zero - Compiler accepted invalid code!
+[0;31m[FAIL][0m float_to_int_assign - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m function_pointer - Rejected but expected 'Type Error\|Semantic Error', got: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+[0;31m[FAIL][0m incompatible_operands - Compiler accepted invalid code!
+[0;32m[PASS][0m int_return_void - Correctly rejected with Type Error\|Semantic Error
+[0;31m[FAIL][0m int_to_bool_assign - Compiler accepted invalid code!
+[0;31m[FAIL][0m logical_not_int - Compiler accepted invalid code!
+[0;31m[FAIL][0m logical_op_wrong_type - Compiler accepted invalid code!
+[0;31m[FAIL][0m mixed_type_array - Compiler accepted invalid code!
+[0;32m[PASS][0m modulo_float - Correctly rejected with Type Error\|Semantic Error
+[0;31m[FAIL][0m scalar_subscript - Compiler accepted invalid code!
+[0;32m[PASS][0m unary_minus_bool - Correctly rejected with Type Error\|Semantic Error
+[0;32m[PASS][0m void_assign - Correctly rejected with Type Error\|Semantic Error
+[0;32m[PASS][0m void_return_value - Correctly rejected with Type Error\|Semantic Error
+[0;32m[PASS][0m wrong_arg_count_few - Correctly rejected with Type Error\|Semantic Error
+[0;32m[PASS][0m wrong_arg_count_many - Correctly rejected with Type Error\|Semantic Error
+[0;32m[PASS][0m wrong_arg_type_narrow - Correctly rejected with Type Error\|Semantic Error
+[0;31m[FAIL][0m wrong_return_type_narrow - Compiler accepted invalid code!
+
+[0;34mTesting Scope Errors...[0m
+[0;31m[FAIL][0m array_redeclaration - Compiler accepted invalid code!
+[0;32m[PASS][0m duplicate_global - Correctly rejected with Scope Error\|undefined\|redeclaration
+[0;31m[FAIL][0m duplicate_local - Compiler accepted invalid code!
+[0;31m[FAIL][0m duplicate_params - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m extern_mismatch - Rejected but expected 'Scope Error\|undefined\|redeclaration', got: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+[0;32m[PASS][0m forward_reference - Correctly rejected with Scope Error\|undefined\|redeclaration
+[0;31m[FAIL][0m function_as_variable - Compiler accepted invalid code!
+[0;32m[PASS][0m function_redefinition - Correctly rejected with Scope Error\|undefined\|redeclaration
+[1;33m[PARTIAL][0m global_array_undeclared - Rejected but expected 'Scope Error\|undefined\|redeclaration', got: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+[0;32m[PASS][0m local_out_of_scope - Correctly rejected with Scope Error\|undefined\|redeclaration
+[0;32m[PASS][0m missing_extern_decl - Correctly rejected with Scope Error\|undefined\|redeclaration
+[0;31m[FAIL][0m no_main - Compiler accepted invalid code!
+[0;31m[FAIL][0m param_shadows_local - Compiler accepted invalid code!
+[1;33m[PARTIAL][0m undefined_array - Rejected but expected 'Scope Error\|undefined\|redeclaration', got: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+[0;32m[PASS][0m undefined_function - Correctly rejected with Scope Error\|undefined\|redeclaration
+[0;32m[PASS][0m undefined_variable - Correctly rejected with Scope Error\|undefined\|redeclaration
+[1;33m[PARTIAL][0m use_before_declaration - Rejected but expected 'Scope Error\|undefined\|redeclaration', got: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+
+[0;34m========================================[0m
+[0;34mTest Summary[0m
+[0;34m========================================[0m
+Total tests: 66
+[0;32mPassed: 32[0m (correctly rejected with right error)
+[1;33mPartial: 12[0m (rejected but wrong error type)
+[0;31mFailed: 22[0m (incorrectly accepted invalid code)
+
+Success rate (correct error): 48%
+Detection rate (any error): 66%
+
+[0;31m========================================[0m
+[0;31mCRITICAL FAILURES (Accepted Invalid Code)[0m
+[0;31m========================================[0m
+[0;31m  - assign_in_condition: accepted invalid code[0m
+[0;31m  - double_semicolon: accepted invalid code[0m
+[0;31m  - arithmetic_on_bool: accepted invalid code[0m
+[0;31m  - array_float_index: accepted invalid code[0m
+[0;31m  - array_wrong_dimensions: accepted invalid code[0m
+[0;31m  - bool_to_int_assign: accepted invalid code[0m
+[0;31m  - comparison_to_int: accepted invalid code[0m
+[0;31m  - division_by_zero: accepted invalid code[0m
+[0;31m  - float_to_int_assign: accepted invalid code[0m
+[0;31m  - incompatible_operands: accepted invalid code[0m
+[0;31m  - int_to_bool_assign: accepted invalid code[0m
+[0;31m  - logical_not_int: accepted invalid code[0m
+[0;31m  - logical_op_wrong_type: accepted invalid code[0m
+[0;31m  - mixed_type_array: accepted invalid code[0m
+[0;31m  - scalar_subscript: accepted invalid code[0m
+[0;31m  - wrong_return_type_narrow: accepted invalid code[0m
+[0;31m  - array_redeclaration: accepted invalid code[0m
+[0;31m  - duplicate_local: accepted invalid code[0m
+[0;31m  - duplicate_params: accepted invalid code[0m
+[0;31m  - function_as_variable: accepted invalid code[0m
+[0;31m  - no_main: accepted invalid code[0m
+[0;31m  - param_shadows_local: accepted invalid code[0m
+
+[1;33m========================================[0m
+[1;33mPartial Matches (Wrong Error Type)[0m
+[1;33m========================================[0m
+[1;33m  - double_operator: expected 'Syntax Error'[0m
+[1;33m  - else_without_if: expected 'Syntax Error'[0m
+[1;33m  - invalid_return_statement: expected 'Syntax Error'[0m
+[1;33m  - array_4d: expected 'Type Error\|Semantic Error'[0m
+[1;33m  - array_negative_size: expected 'Type Error\|Semantic Error'[0m
+[1;33m  - array_zero_size: expected 'Type Error\|Semantic Error'[0m
+[1;33m  - call_non_function: expected 'Type Error\|Semantic Error'[0m
+[1;33m  - function_pointer: expected 'Type Error\|Semantic Error'[0m
+[1;33m  - extern_mismatch: expected 'Scope Error\|undefined\|redeclaration'[0m
+[1;33m  - global_array_undeclared: expected 'Scope Error\|undefined\|redeclaration'[0m
+[1;33m  - undefined_array: expected 'Scope Error\|undefined\|redeclaration'[0m
+[1;33m  - use_before_declaration: expected 'Scope Error\|undefined\|redeclaration'[0m
+
