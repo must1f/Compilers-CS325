@@ -854,6 +854,7 @@ public:
   virtual Value *codegen() { return nullptr; };
   virtual std::string to_string() const { return ""; };
   virtual bool isArrayAccess() const { return false; }
+  virtual bool isAssignment() const { return false; } // Check if node is an assignment
 };
 
 // integer literals like 1, 2, 10
@@ -1207,6 +1208,7 @@ public:
   std::unique_ptr<ASTnode> &getRHS() { return RHS; }
 
   virtual Value* codegen() override;
+  virtual bool isAssignment() const override { return true; } // Mark as assignment
 
   virtual std::string to_string() const override {
     std::string result = std::string(COLOR_MAGENTA) + "ArrayAssignmentExpr" + std::string(COLOR_RESET) + "\n";
@@ -1665,6 +1667,7 @@ public:
   std::unique_ptr<ASTnode> &getRHS() { return RHS; }
 
   virtual Value* codegen() override;
+  virtual bool isAssignment() const override { return true; } // Mark as assignment
 
   virtual std::string to_string() const override {
   std::string result = std::string(COLOR_MAGENTA) + "AssignmentExpr" + std::string(COLOR_RESET) + "\n";
@@ -2305,12 +2308,14 @@ static std::unique_ptr<ASTnode> ParseExper() {
 }
 
 // expr_stmt ::= expr ";"
-//            |  ";"
+// Note: Empty statements (just ";") are NOT allowed in this teaching compiler
 static std::unique_ptr<ASTnode> ParseExperStmt() {
 
-  if (CurTok.type == SC) { // empty statement
-    getNextToken();        // eat ;
-    return nullptr;
+  if (CurTok.type == SC) { // Reject empty statement - stricter than standard C
+    // We need to consume the semicolon before returning error to avoid infinite loop
+    TOKEN errorTok = CurTok;
+    getNextToken(); // eat the semicolon
+    return LogError(errorTok, "unexpected semicolon - empty statements are not allowed");
   } else {
     auto expr = ParseExper();
     if (expr) {
@@ -2371,6 +2376,12 @@ static std::unique_ptr<ASTnode> ParseIfStmt() {
     auto Cond = ParseExper();
     if (!Cond)
       return nullptr;
+    
+    // Check if condition is an assignment (stricter than C - for teaching purposes)
+    if (Cond->isAssignment()) {
+      return LogError(CurTok, "assignment in condition is not allowed - use comparison (==) instead");
+    }
+    
     if (CurTok.type != RPAR)
       return LogError(CurTok, "expected )");
     getNextToken(); // eat )
@@ -2432,6 +2443,12 @@ static std::unique_ptr<ASTnode> ParseWhileStmt() {
     auto Cond = ParseExper();
     if (!Cond)
       return nullptr;
+    
+    // Check if condition is an assignment (stricter than C - for teaching purposes)
+    if (Cond->isAssignment()) {
+      return LogError(CurTok, "assignment in condition is not allowed - use comparison (==) instead");
+    }
+    
     if (CurTok.type != RPAR)
       return LogError(CurTok, "expected )");
     getNextToken(); // eat )
