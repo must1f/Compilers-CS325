@@ -3051,6 +3051,22 @@ static int extractInnerDimensionFromParamType(const std::string& paramTypeStr) {
     return -1;
 }
 
+// countArrayDimensions - Count number of dimensions in an array type string
+// For "int[10]" returns 1, for "int[10][5]" returns 2, for "int[10][5][3]" returns 3
+// For "int*" returns 1 (pointer parameter), for "int*[10]" returns 2
+// Returns 0 for non-array types
+static int countArrayDimensions(const std::string& typeStr) {
+    int count = 0;
+    for (char c : typeStr) {
+        if (c == '[') count++;
+    }
+    // Check if it's a pointer parameter (e.g., "int*" or "float*[10]")
+    if (typeStr.find('*') != std::string::npos) {
+        count++; // Pointer parameter adds one dimension
+    }
+    return count;
+}
+
 // getArrayTypeForParam - Create the proper array type for a 2D array parameter
 // For "float*[10]" returns [10 x float]
 // For "int*[5]" returns [5 x i32]
@@ -3467,6 +3483,20 @@ Value* BinaryExprAST::codegen() {
                            "Arithmetic operator '" + Op + "' requires numeric operands (int or float), not bool",
                            -1, -1,
                            "LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
+            return nullptr;
+        }
+        
+        // Check for incompatible types: mixing int and float is not allowed
+        bool leftIsFloat = OrigLTy->isFloatTy() || OrigLTy->isDoubleTy();
+        bool rightIsFloat = OrigRTy->isFloatTy() || OrigRTy->isDoubleTy();
+        bool leftIsInt = OrigLTy->isIntegerTy(32);
+        bool rightIsInt = OrigRTy->isIntegerTy(32);
+        
+        if ((leftIsFloat && rightIsInt) || (leftIsInt && rightIsFloat)) {
+            LogCompilerError(ErrorType::SEMANTIC_TYPE,
+                           "Binary operator '" + Op + "' requires operands of the same type",
+                           -1, -1,
+                           "Cannot mix int and float. LHS: " + getTypeName(OrigLTy) + ", RHS: " + getTypeName(OrigRTy));
             return nullptr;
         }
     }
@@ -4020,6 +4050,16 @@ Value* BlockAST::codegen() {
         } else {
             // Simple variable declaration
             DEBUG_CODEGEN("    Processing as simple variable declaration");
+            
+            // Check if name collides with a function
+            if (TheModule->getFunction(VarName)) {
+                LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                               "Variable '" + VarName + "' conflicts with function name",
+                               CurTok.lineNo, CurTok.columnNo,
+                               "Cannot use function name as variable name");
+                return nullptr;
+            }
+            
             Type* VarType = getTypeFromString(TypeStr);
             if (!VarType) {
                 LogCompilerError(ErrorType::SEMANTIC_TYPE,
@@ -4215,6 +4255,15 @@ Value* GlobVarDeclAST::codegen() {
         LogCompilerError(ErrorType::SEMANTIC_SCOPE, msg);
         return nullptr;
     }
+    
+    // Check if name collides with a function
+    if (TheModule->getFunction(getName())) {
+        LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                       "Global variable '" + getName() + "' conflicts with function name",
+                       -1, -1,
+                       "Cannot use function name as variable name");
+        return nullptr;
+    }
 
     llvm::Type* VarType = getTypeFromString(getType());
     if (!VarType) {
@@ -4273,6 +4322,15 @@ Value* ArrayDeclAST::codegen() {
     std::string TypeStr = Type;
     for (size_t i = 0; i < Dimensions.size(); i++) {
         TypeStr += "[" + std::to_string(Dimensions[i]) + "]";
+    }
+    
+    // Check if name collides with a function
+    if (TheModule->getFunction(getName())) {
+        LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                       "Array '" + getName() + "' conflicts with function name",
+                       -1, -1,
+                       "Cannot use function name as array name");
+        return nullptr;
     }
 
     if (IsGlobal) {
@@ -4368,6 +4426,22 @@ Value* ArrayAccessAST::codegen() {
             }
         } else {
             return LogErrorV("Unknown array variable: " + getName());
+        }
+    }
+
+    // Validate array dimensions match the number of indices
+    TypeInfo* typeInfo = getTypeInfo(getName());
+    if (typeInfo) {
+        int expectedDims = countArrayDimensions(typeInfo->typeName);
+        int actualIndices = Indices.size();
+        
+        if (expectedDims > 0 && actualIndices != expectedDims) {
+            std::string msg = "Array dimension mismatch for '" + getName() + "': ";
+            msg += "array has " + std::to_string(expectedDims) + " dimension(s), ";
+            msg += "but accessed with " + std::to_string(actualIndices) + " index/indices";
+            LogCompilerError(ErrorType::SEMANTIC_TYPE, msg, -1, -1,
+                           "Array type: " + typeInfo->typeName);
+            return nullptr;
         }
     }
 
