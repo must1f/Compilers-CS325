@@ -1,13 +1,11 @@
 ; ModuleID = 'mini-c'
 source_filename = "mini-c"
 
-define i32 @foo(i32 %x) {
+define i32 @main() {
 entry:
-  %x2 = alloca i32, align 4
-  %x1 = alloca i32, align 4
-  store i32 %x, ptr %x1, align 4
-  store i32 0, ptr %x2, align 4
-  store i32 10, ptr %x2, align 4
-  %x3 = load i32, ptr %x2, align 4
-  ret i32 %x3
+  %x = alloca i32, align 4
+  store i32 0, ptr %x, align 4
+  store i32 poison, ptr %x, align 4
+  %x1 = load i32, ptr %x, align 4
+  ret i32 %x1
 }

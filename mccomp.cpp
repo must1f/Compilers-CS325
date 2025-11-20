@@ -45,6 +45,7 @@ static std::map<std::string, AllocaInst*> NamedValues;
 static std::map<std::string, GlobalVariable*> GlobalValues;
 static std::map<std::string, std::string> VariableTypes;
 static Function *CurrentFunction = nullptr;
+static std::set<std::string> CurrentFunctionParams; // Track current function's parameter names
 
 // Source line cache for better error reporting (forward declarations)
 static std::vector<std::string> SourceLines;
@@ -4029,11 +4030,19 @@ Value* BlockAST::codegen() {
         }
         CurrentBlockVars.insert(VarName);
 
+        // Check if shadowing a function parameter (NOT allowed)
+        if (CurrentFunctionParams.find(VarName) != CurrentFunctionParams.end()) {
+            LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                           "Local variable '" + VarName + "' shadows function parameter",
+                           CurTok.lineNo, CurTok.columnNo);
+            return nullptr;
+        }
+
         // Check if shadowing a global variable (allowed)
         if (GlobalValues.find(VarName) != GlobalValues.end()) {
             DEBUG_CODEGEN("    Shadowing global variable '" + VarName + "'");
         }
-
+        
         // Save old binding if variable already exists in outer scope (shadowing allowed)
         if (NamedValues[VarName]) {
             OldBindings[VarName] = NamedValues[VarName];
@@ -4145,6 +4154,7 @@ Value* FunctionDeclAST::codegen() {
 
     // Clear variable scope
     NamedValues.clear();
+    CurrentFunctionParams.clear(); // Clear parameter names from previous function
 
     // Check for duplicate parameter names
     std::set<std::string> ParamNames;
@@ -4158,6 +4168,7 @@ Value* FunctionDeclAST::codegen() {
             return nullptr;
         }
         ParamNames.insert(ParamName);
+        CurrentFunctionParams.insert(ParamName); // Track parameter names
     }
 
     // Create allocas for parameters
@@ -4753,6 +4764,22 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Parsing Finished\n");
     }
     ShowPhaseComplete("Parsing");
+    
+    // Check if main function exists
+    if (!TheModule->getFunction("main")) {
+        LogCompilerError(ErrorType::SEMANTIC_OTHER,
+                       "Program must have a 'main' function",
+                       -1, -1,
+                       "Entry point 'main' is required");
+        HasErrors = true;
+    }
+    
+    if (HasErrors) {
+        PrintAllErrors();
+        fclose(pFile);
+        return 1;
+    }
+    
     DEBUG_USER("Starting code generation...");
 
     printf("********************* FINAL IR (begin) ****************************\n");
