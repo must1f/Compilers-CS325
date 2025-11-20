@@ -3569,6 +3569,27 @@ Value* BinaryExprAST::codegen() {
 
     if (Op == "/") {
         DEBUG_CODEGEN("  Creating division");
+        
+        // Check for division by zero with constant values
+        if (auto* CI = dyn_cast<ConstantInt>(R)) {
+            if (CI->isZero()) {
+                LogCompilerError(ErrorType::SEMANTIC_OTHER,
+                               "Division by zero detected",
+                               -1, -1,
+                               "Constant zero divisor is not allowed");
+                return nullptr;
+            }
+        }
+        if (auto* CF = dyn_cast<ConstantFP>(R)) {
+            if (CF->isZero()) {
+                LogCompilerError(ErrorType::SEMANTIC_OTHER,
+                               "Division by zero detected",
+                               -1, -1,
+                               "Constant zero divisor is not allowed");
+                return nullptr;
+            }
+        }
+        
         if (OpType->isFloatingPointTy())
             return Builder.CreateFDiv(L, R, "fdiv");
         else if (OpType->isIntegerTy())
@@ -3583,6 +3604,18 @@ Value* BinaryExprAST::codegen() {
 
     if (Op == "%") {
         DEBUG_CODEGEN("  Creating modulo");
+        
+        // Check for modulo by zero with constant values
+        if (auto* CI = dyn_cast<ConstantInt>(R)) {
+            if (CI->isZero()) {
+                LogCompilerError(ErrorType::SEMANTIC_OTHER,
+                               "Modulo by zero detected",
+                               -1, -1,
+                               "Constant zero divisor is not allowed");
+                return nullptr;
+            }
+        }
+        
         if (OpType->isIntegerTy())
             return Builder.CreateSRem(L, R, "mod");
         else {
