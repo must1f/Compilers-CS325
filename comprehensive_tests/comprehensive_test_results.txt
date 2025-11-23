@@ -1,0 +1,96 @@
+[0;34m========================================[0m
+[0;34mMiniC Comprehensive Test Suite[0m
+[0;34m========================================[0m
+
+[0;34mRunning Type System Tests...[0m
+[0;32m[PASS][0m type_tests/01_bool_to_int_widening - Compiled successfully
+[0;32m[PASS][0m type_tests/02_int_to_float_widening - Compiled successfully
+[0;32m[PASS][0m type_tests/03_bool_to_float_widening - Compiled successfully
+[0;32m[PASS][0m type_tests/04_float_to_int_narrowing_error - Correctly rejected
+[0;32m[PASS][0m type_tests/05_int_to_bool_narrowing_error - Correctly rejected
+[0;32m[PASS][0m type_tests/06_conditional_narrowing_ok - Compiled successfully
+[0;32m[PASS][0m type_tests/07_logical_narrowing_ok - Compiled successfully
+[0;32m[PASS][0m type_tests/08_modulo_float_error - Correctly rejected
+[0;32m[PASS][0m type_tests/09_arithmetic_bool_error - Correctly rejected
+[0;32m[PASS][0m type_tests/10_mixed_arithmetic_widening - Compiled successfully
+
+[0;34mRunning Scope Tests...[0m
+[0;32m[PASS][0m scope_tests/01_global_single_decl - Compiled successfully
+[0;32m[PASS][0m scope_tests/02_global_redecl_error - Correctly rejected
+[0;32m[PASS][0m scope_tests/03_local_shadows_global - Compiled successfully
+[0;32m[PASS][0m scope_tests/04_multiple_shadow_levels - Compiled successfully
+[0;32m[PASS][0m scope_tests/05_duplicate_same_scope_error - Correctly rejected
+[0;32m[PASS][0m scope_tests/06_use_before_decl_error - Correctly rejected
+[0;31m[FAIL][0m scope_tests/07_forward_function_ok - Should compile but failed
+       Error: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+[0;32m[PASS][0m scope_tests/08_undefined_function_error - Correctly rejected
+[0;32m[PASS][0m scope_tests/09_out_of_scope_error - Correctly rejected
+[0;31m[FAIL][0m scope_tests/10_function_redef_error - Should fail but compiled
+
+[0;34mRunning Function Tests...[0m
+[0;32m[PASS][0m func_tests/01_empty_params_zero_args - Compiled successfully
+[0;32m[PASS][0m func_tests/02_empty_params_with_args_error - Correctly rejected
+[0;32m[PASS][0m func_tests/03_return_widening_ok - Compiled successfully
+[0;32m[PASS][0m func_tests/04_return_narrowing_error - Correctly rejected
+[0;32m[PASS][0m func_tests/05_arg_widening_ok - Compiled successfully
+[0;32m[PASS][0m func_tests/06_arg_narrowing_error - Correctly rejected
+[0;32m[PASS][0m func_tests/07_too_few_args_error - Correctly rejected
+[0;32m[PASS][0m func_tests/08_too_many_args_error - Correctly rejected
+[0;32m[PASS][0m func_tests/09_deep_recursion - Compiled successfully
+[0;31m[FAIL][0m func_tests/10_mutual_recursion - Should compile but failed
+       Error: [1m[31m║  Compilation Failed - 1 Error(s) Found               ║[0m
+
+[0;34mRunning Expression Tests...[0m
+[0;32m[PASS][0m expr_tests/01_operator_precedence - Compiled successfully
+[0;32m[PASS][0m expr_tests/02_left_associativity - Compiled successfully
+[0;32m[PASS][0m expr_tests/03_unary_chains - Compiled successfully
+[0;32m[PASS][0m expr_tests/04_comparison_operators - Compiled successfully
+[0;32m[PASS][0m expr_tests/05_logical_operators - Compiled successfully
+[0;32m[PASS][0m expr_tests/06_short_circuit - Compiled successfully
+[0;32m[PASS][0m expr_tests/07_complex_expression - Compiled successfully
+[0;32m[PASS][0m expr_tests/08_unary_minus_types - Compiled successfully
+[0;32m[PASS][0m expr_tests/09_parentheses - Compiled successfully
+[0;32m[PASS][0m expr_tests/10_type_promotion - Compiled successfully
+
+[0;34mRunning Control Flow Tests...[0m
+[0;32m[PASS][0m ctrl_tests/01_simple_if - Compiled successfully
+[0;32m[PASS][0m ctrl_tests/02_if_else - Compiled successfully
+[0;32m[PASS][0m ctrl_tests/03_nested_if - Compiled successfully
+[0;32m[PASS][0m ctrl_tests/04_simple_while - Compiled successfully
+[0;32m[PASS][0m ctrl_tests/05_nested_while - Compiled successfully
+[0;32m[PASS][0m ctrl_tests/06_while_early_return - Compiled successfully
+[0;31m[FAIL][0m ctrl_tests/07_empty_blocks - Should compile but failed
+       Error: [1m[31m║  Compilation Failed - 4 Error(s) Found               ║[0m
+[0;32m[PASS][0m ctrl_tests/08_multiple_returns - Compiled successfully
+[0;32m[PASS][0m ctrl_tests/09_complex_nested - Compiled successfully
+[0;32m[PASS][0m ctrl_tests/10_empty_statements - Compiled successfully
+
+[0;34mRunning Error Detection Tests...[0m
+[0;32m[PASS][0m error_tests/01_missing_semicolon - Correctly rejected
+[0;32m[PASS][0m error_tests/02_unmatched_braces - Correctly rejected
+[0;32m[PASS][0m error_tests/03_missing_function_body - Correctly rejected
+[0;32m[PASS][0m error_tests/04_invalid_type - Correctly rejected
+[0;32m[PASS][0m error_tests/05_void_variable - Correctly rejected
+[0;32m[PASS][0m error_tests/06_missing_return_type - Correctly rejected
+[0;32m[PASS][0m error_tests/07_type_mismatch - Correctly rejected
+[0;32m[PASS][0m error_tests/08_undefined_variable - Correctly rejected
+[0;32m[PASS][0m error_tests/09_void_return_value - Correctly rejected
+[0;32m[PASS][0m error_tests/10_missing_return - Compiled successfully
+
+[0;34m========================================[0m
+[0;34mTest Summary[0m
+[0;34m========================================[0m
+Total tests: 60
+[0;32mPassed: 56[0m
+[0;31mFailed: 4[0m
+
+Success rate: 93%
+
+[0;31m========================================[0m
+[0;31mFailed Tests[0m
+[0;31m========================================[0m
+[0;31m  - scope_tests/07_forward_function_ok: should compile but failed[0m
+[0;31m  - scope_tests/10_function_redef_error: should fail but compiled[0m
+[0;31m  - func_tests/10_mutual_recursion: should compile but failed[0m
+[0;31m  - ctrl_tests/07_empty_blocks: should compile but failed[0m
+
