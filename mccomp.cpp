@@ -2494,9 +2494,16 @@ static std::unique_ptr<ASTnode> ParseStmt() {
   return nullptr;
 }
 
-// stmt_list ::= stmt stmt_list_prime
+// stmt_list ::= stmt stmt_list_prime | ε (allow empty blocks)
 static std::vector<std::unique_ptr<ASTnode>> ParseStmtList() {
   std::vector<std::unique_ptr<ASTnode>> stmt_list; // vector of statements
+
+  // Check if block is empty (immediately followed by '}')
+  if (CurTok.type == RBRA) {
+    // Empty block - return empty statement list
+    return stmt_list;
+  }
+
   auto stmt = ParseStmt();
   if (stmt) {
     stmt_list.emplace_back(std::move(stmt));
@@ -2556,14 +2563,14 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDeclsPrime() {
              CurTok.type == INT_LIT || CurTok.type == FLOAT_LIT ||
              CurTok.type == BOOL_LIT || CurTok.type == SC ||
              CurTok.type == LBRA || CurTok.type == IF || CurTok.type == WHILE ||
-             CurTok.type == RETURN) { // FOLLOW(local_decls_prime)
+             CurTok.type == RETURN || CurTok.type == RBRA) { // FOLLOW(local_decls_prime) - added RBRA for empty blocks
     // expand by local_decls_prime ::=  ε
     // do nothing;
   } else {
     LogError(
         CurTok,
         "expected '-', '!', ('' , IDENT , STRING_LIT , INT_LIT , FLOAT_LIT, \
-      BOOL_LIT, ';', '{', 'if', 'while', 'return' after local variable declaration\n");
+      BOOL_LIT, ';', '{', 'if', 'while', 'return', '}' after local variable declaration\n");
   }
 
   return local_decls_prime;
@@ -2673,13 +2680,13 @@ static std::vector<std::unique_ptr<DeclAST>> ParseLocalDecls() {
              CurTok.type == INT_LIT || CurTok.type == RETURN ||
              CurTok.type == FLOAT_LIT || CurTok.type == BOOL_LIT ||
              CurTok.type == COMMA || CurTok.type == LBRA || CurTok.type == IF ||
-             CurTok.type == WHILE) { // FOLLOW(local_decls)
+             CurTok.type == WHILE || CurTok.type == SC || CurTok.type == RBRA) { // FOLLOW(local_decls) - added RBRA for empty blocks
                                      // do nothing
   } else {
     LogError(
         CurTok,
         "expected '-', '!', '(' , IDENT , STRING_LIT , INT_LIT , FLOAT_LIT, \
-        BOOL_LIT, ';', '{', 'if', 'while', 'return'");
+        BOOL_LIT, ';', '{', 'if', 'while', 'return', '}'");
   }
 
   return local_decls;
@@ -2806,30 +2813,51 @@ static std::unique_ptr<ASTnode> ParseDecl() {
           return LogError(CurTok, "expected ')' in function declaration");
 
         getNextToken();          // eat )
-        if (CurTok.type != LBRA) // syntax error
-          return LogError(
-              CurTok, "expected '{' in function declaration, function body");
 
-        auto B = ParseBlock(); // parse the function body
-        if (!B)
-          return nullptr;
-        else
-          fprintf(stderr, "Parsed block of statements in function\n");
+        // Check for forward declaration (prototype) or function definition
+        std::unique_ptr<ASTnode> B = nullptr;
 
-        // now create a Function prototype
-        // create a Function body
-        // put these to together
-        // and return a std::unique_ptr<FunctionDeclAST>
-        fprintf(stderr, "Parsed a function declaration\n");
+        if (CurTok.type == SC) {
+          // Forward declaration: int foo(int x);
+          getNextToken(); // eat ';'
+          fprintf(stderr, "Parsed a function forward declaration (prototype)\n");
 
-        auto Proto = std::make_unique<FunctionPrototypeAST>(
-            IdName, PrevTok.lexeme, std::move(P));
-        std::unique_ptr<ASTnode> funcDecl = std::make_unique<FunctionDeclAST>(std::move(Proto),
-                                                                       std::move(B));
+          auto Proto = std::make_unique<FunctionPrototypeAST>(
+              IdName, PrevTok.lexeme, std::move(P));
+          std::unique_ptr<ASTnode> funcDecl = std::make_unique<FunctionDeclAST>(
+              std::move(Proto), nullptr);
 
-        funcDecl->codegen();
-        printAST(funcDecl, "Function: " + IdName);
-        return funcDecl;
+          // For prototypes, just register the function without generating full body
+          funcDecl->codegen();
+          printAST(funcDecl, "Function Prototype: " + IdName);
+          return funcDecl;
+
+        } else if (CurTok.type == LBRA) {
+          // Function definition: int foo(int x) { ... }
+          B = ParseBlock(); // parse the function body
+          if (!B)
+            return nullptr;
+          else
+            fprintf(stderr, "Parsed block of statements in function\n");
+
+          // now create a Function prototype
+          // create a Function body
+          // put these to together
+          // and return a std::unique_ptr<FunctionDeclAST>
+          fprintf(stderr, "Parsed a function declaration\n");
+
+          auto Proto = std::make_unique<FunctionPrototypeAST>(
+              IdName, PrevTok.lexeme, std::move(P));
+          std::unique_ptr<ASTnode> funcDecl = std::make_unique<FunctionDeclAST>(
+              std::move(Proto), std::move(B));
+
+          funcDecl->codegen();
+          printAST(funcDecl, "Function: " + IdName);
+          return funcDecl;
+
+        } else {
+          return LogError(CurTok, "expected '{' or ';' after function declaration");
+        }
       } else
         return LogError(CurTok, "expected ';' or ('");
     } else
@@ -3241,29 +3269,26 @@ static Type* getValueType(Value* V) {
 }
 
 // isNarrowingConversion - Check if conversion from From to To is narrowing
+// Per MiniC spec: widening is bool→int→float, narrowing is reverse
 static bool isNarrowingConversion(Type* From, Type* To) {
     if (!From || !To) return false;
     if (From == To) return false;
 
-    // float → int (narrowing)
+    // Narrowing conversions (information loss):
+    // float → int (narrowing - loses decimal part)
     if (From->isFloatTy() && To->isIntegerTy(32))
         return true;
-    // int → bool (narrowing)
-    if (From->isIntegerTy(32) && To->isIntegerTy(1))
-        return true;
-    // double → float (narrowing)
-    if (From->isDoubleTy() && To->isFloatTy())
-        return true;
-    // float → bool (narrowing)
+    // float → bool (narrowing - loses magnitude)
     if (From->isFloatTy() && To->isIntegerTy(1))
         return true;
-    // bool → int (narrowing - disallow implicit bool to int)
-    if (From->isIntegerTy(1) && To->isIntegerTy(32))
+    // int → bool (narrowing - loses magnitude, only keeps zero/non-zero)
+    if (From->isIntegerTy(32) && To->isIntegerTy(1))
         return true;
-    // bool → float (narrowing - disallow implicit bool to float)
-    if (From->isIntegerTy(1) && To->isFloatTy())
+    // double → float (narrowing - loses precision)
+    if (From->isDoubleTy() && To->isFloatTy())
         return true;
 
+    // Note: bool→int and bool→float are WIDENING per spec, not narrowing
     return false;
 }
 
@@ -3631,16 +3656,18 @@ Value* BinaryExprAST::codegen() {
 
     if (Op == "&&") {
         DEBUG_CODEGEN("  Creating logical AND");
-        L = castToType(L, Type::getInt1Ty(TheContext), false, "logical AND left operand");
-        R = castToType(R, Type::getInt1Ty(TheContext), false, "logical AND right operand");
+        // Logical operators allow narrowing (like conditionals) per MiniC spec
+        L = castToType(L, Type::getInt1Ty(TheContext), true, "logical AND left operand");
+        R = castToType(R, Type::getInt1Ty(TheContext), true, "logical AND right operand");
         if (!L || !R) return nullptr;
         return Builder.CreateAnd(L, R, "and");
     }
 
     if (Op == "||") {
         DEBUG_CODEGEN("  Creating logical OR");
-        L = castToType(L, Type::getInt1Ty(TheContext), false, "logical OR left operand");
-        R = castToType(R, Type::getInt1Ty(TheContext), false, "logical OR right operand");
+        // Logical operators allow narrowing (like conditionals) per MiniC spec
+        L = castToType(L, Type::getInt1Ty(TheContext), true, "logical OR left operand");
+        R = castToType(R, Type::getInt1Ty(TheContext), true, "logical OR right operand");
         if (!L || !R) return nullptr;
         return Builder.CreateOr(L, R, "or");
     }
@@ -3680,9 +3707,10 @@ Value* UnaryExprAST::codegen() {
 
     if (Op == "!") {
         DEBUG_CODEGEN("  Creating logical NOT");
-        OperandV = castToType(OperandV, Type::getInt1Ty(TheContext), false, "logical NOT operand");
+        // Logical NOT allows narrowing (like conditionals) per MiniC spec
+        OperandV = castToType(OperandV, Type::getInt1Ty(TheContext), true, "logical NOT operand");
         if (!OperandV) {
-            return LogErrorV("Logical NOT operator '!' requires boolean operand");
+            return LogErrorV("Failed to convert operand to boolean for '!' operator");
         }
         return Builder.CreateNot(OperandV, "not");
     }
@@ -4093,6 +4121,20 @@ Value* FunctionDeclAST::codegen() {
         for (auto& Arg : TheFunction->args()) {
             Arg.setName(Proto->getParams()[Idx++]->getName());
         }
+    } else {
+        // Function already exists - check if it already has a body (redefinition)
+        if (!TheFunction->empty()) {
+            LogCompilerError(ErrorType::SEMANTIC_SCOPE,
+                           "Redefinition of function '" + Proto->getName() + "'",
+                           CurTok.lineNo, CurTok.columnNo);
+            return nullptr;
+        }
+    }
+
+    // If this is a forward declaration (no body), just return the prototype
+    if (!Block) {
+        DEBUG_CODEGEN("Created function prototype: " + Proto->getName());
+        return TheFunction;
     }
 
     // Create entry block
